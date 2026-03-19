@@ -1,0 +1,3 @@
+/eos/experiment/fcc/ee/generation/DelphesEvents/pre_fall2022_training/IDEA/p8_ee_ZH_Znunu_Hbb_ecm240/events_502958663.root
+/eos/experiment/fcc/ee/generation/DelphesEvents/pre_fall2022_training/IDEA/p8_ee_ZH_Znunu_Hcc_ecm240/events_509680658.root
+/eos/experiment/fcc/ee/generation/DelphesEvents/pre_fall2022_training/IDEA/p8_ee_ZH_Znunu_Hdd_ecm240/events_501672005.root

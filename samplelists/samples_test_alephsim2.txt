@@ -1,0 +1,10 @@
+/eos/experiment/aleph/EDM4HEP/MC/1994/QQB/ZM4212_39_AL.root
+/eos/experiment/aleph/EDM4HEP/MC/1994/QQB/ZM4212_74_AL.root
+/eos/experiment/aleph/EDM4HEP/MC/1994/QQB/ZM4212_40_AL.root
+/eos/experiment/aleph/EDM4HEP/MC/1994/QQB/ZM4212_75_AL.root
+/eos/experiment/aleph/EDM4HEP/MC/1994/QQB/ZM4212_41_AL.root
+/eos/experiment/aleph/EDM4HEP/MC/1994/QQB/ZM4212_76_AL.root
+/eos/experiment/aleph/EDM4HEP/MC/1994/QQB/ZM4212_42_AL.root
+/eos/experiment/aleph/EDM4HEP/MC/1994/QQB/ZM4212_77_AL.root
+/eos/experiment/aleph/EDM4HEP/MC/1994/QQB/ZM4212_43_AL.root
+/eos/experiment/aleph/EDM4HEP/MC/1994/QQB/ZM4212_78_AL.root

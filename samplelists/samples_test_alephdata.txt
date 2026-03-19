@@ -1,0 +1,12 @@
+/eos/experiment/aleph/EDM4HEP/DATA/1994_old/LAST/2200/data_2200_1.root
+/eos/experiment/aleph/EDM4HEP/DATA/1994_old/LAST/2201/data_2201_1.root
+/eos/experiment/aleph/EDM4HEP/DATA/1994_old/LAST/2202/data_2202_1.root
+/eos/experiment/aleph/EDM4HEP/DATA/1994_old/LAST/2203/data_2203_1.root
+/eos/experiment/aleph/EDM4HEP/DATA/1994_old/LAST/2204/data_2204_1.root
+/eos/experiment/aleph/EDM4HEP/DATA/1994_old/LAST/2206/data_2206_1.root
+/eos/experiment/aleph/EDM4HEP/DATA/1994_old/LAST/2207/data_2207_1.root
+/eos/experiment/aleph/EDM4HEP/DATA/1994_old/LAST/2209/data_2209_1.root
+/eos/experiment/aleph/EDM4HEP/DATA/1994_old/LAST/2217/data_2217_1.root
+/eos/experiment/aleph/EDM4HEP/DATA/1994_old/LAST/2218/data_2218_1.root
+/eos/experiment/aleph/EDM4HEP/DATA/1994_old/LAST/2219/data_2219_1.root
+/eos/experiment/aleph/EDM4HEP/DATA/1994_old/LAST/2220/data_2220_1.root
