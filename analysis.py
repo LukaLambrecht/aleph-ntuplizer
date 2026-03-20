@@ -219,10 +219,21 @@ ROOT.gInterpreter.Declare("""
     }""")
 
 
+# dirty hard-coded settings using global variables
+# (try to do more cleanly later, but doesn't seem very trivial with RDFanalysis)
+do_secondary_vertices = True
+do_v0_candidates = True
+
+
 # main analyzer class
 class RDFanalysis():
 
     def analysers(df):
+
+        # hard-coded settings
+        # (maybe add as command line args later?)
+        do_secondary_vertices = False
+        do_v0_candidates = False
 
         # initialization
         dfout = df
@@ -541,7 +552,8 @@ class RDFanalysis():
         )
 
         # find secondary vertices (per jet)
-        dfout = (
+        if do_secondary_vertices:
+          dfout = (
             dfout
 
             # fit secondary vertices per jet.
@@ -582,10 +594,11 @@ class RDFanalysis():
             # store counters
             .Define("Event_nSV", "EventSecondaryVertices.size()")
             .Define("Jets_nSV", "FCCAnalyses::VertexingUtils::get_n_SV_jets(SecondaryVertices)")
-        )
+          )
 
         # find V0s (per jet)
-        dfout = (
+        if do_v0_candidates:
+          dfout = (
             dfout
 
             # reconstruct all V0 candidates in the event
@@ -619,7 +632,7 @@ class RDFanalysis():
             .Define("Jets_nKsCandidates", "countInstances(V0Candidates_pdgId, 310)")
             .Define("Jets_nLambdaCandidates", "countInstances(V0Candidates_pdgId, 3122)")
 
-        )
+          )
 
         # store the PDG ID of every jet constituent
         # (or at least every particle for which it is available, see more details in the helper function)
@@ -908,7 +921,8 @@ class RDFanalysis():
         ]
 
         # secondary vertex variables
-        branchList += [
+        if do_secondary_vertices:
+          branchList += [
             'Event_nSV',
             'Jets_nSV',
             'SecondaryVertices_xrel',
@@ -927,10 +941,11 @@ class RDFanalysis():
             'SecondaryVertices_dxyz',
             'SecondaryVertices_cosPointing',
             'SecondaryVertices_correctedMass',
-        ]
+          ]
 
         # V0-candidate variables
-        branchList += [
+        if do_v0_candidates:
+          branchList += [
             'Event_nV0Candidates',
             'Jets_nV0Candidates',
             'Jets_nKsCandidates',
@@ -952,7 +967,7 @@ class RDFanalysis():
             'V0Candidates_dxyz',
             'V0Candidates_cosPointing',
             'V0Candidates_correctedMass',
-        ]
+          ]
 
         # jet-constituent-level variables
         branchList += [

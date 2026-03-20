@@ -168,6 +168,7 @@ if __name__=='__main__':
             if not key.startswith(collection): continue
             newkey = key.replace(collection, '')
             thisdict[newkey] = val
+        if len(thisdict) == 0: continue
         zipped[collection_name] = ak.zip(thisdict)
     copies = [
         'bz',
