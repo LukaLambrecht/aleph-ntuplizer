@@ -71,7 +71,6 @@ if __name__ == '__main__':
         cmd += f' -o {outputfile}'
         if args.run_ntuplizer:
             cmd += ' --run-ntuplizer'
-            cmd += ' --no-compile'
         if args.redirect_stdout: cmd += ' --redirect_stdout'
         if args.do_clean: cmd += ' --do-clean'
         cmds.append(cmd)
