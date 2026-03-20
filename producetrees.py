@@ -60,8 +60,6 @@ if __name__ == '__main__':
       # todo: find out if shuffling would be needed here.
     parser.add_argument('--redirect-stdout', default=False, action='store_true',
       help='Redirect stdout and stderr from the terminal to txt files.')
-    parser.add_argument('--no-compile', default=False, action='store_true',
-      help='Do not recompile makentuples on the fly (useful in job submission)')
     parser.add_argument('--do-clean', default=False, action='store_true',
       help='Remove intermediate output after running the ntuplizing stage.')
     args = parser.parse_args()
@@ -85,12 +83,6 @@ if __name__ == '__main__':
     outputdir = os.path.dirname(args.outputfile)
     if not os.path.exists(outputdir): os.makedirs(outputdir)
 
-    # compile makentuples
-    if args.run_ntuplizer and not args.no_compile:
-        cmd_compile = "g++ -o makentuples makentuples.cpp `root-config --cflags --libs` -Wall"
-        print('Compiling makentuples...')
-        subprocess.check_call(cmd_compile, shell = True, stdout=None, stderr=None)
-
     # make command for stage 1
     tempfile = args.outputfile
     cmd_stage1 = 'fccanalysis run analysis.py'
@@ -99,7 +91,7 @@ if __name__ == '__main__':
     cmd_stage1 += ' --files-list {}'.format(' '.join(input_files))
 
     # make command for stage 2 
-    cmd_stagentuple = f'./makentuples {tempfile}'
+    cmd_stagentuple = f'python makentuples.py -i {tempfile}'
 
     # create files storing stdout and stderr
     stdoutpath = args.outputfile.replace('.root', '_stdout.txt')
@@ -124,10 +116,12 @@ if __name__ == '__main__':
     # run stage 2
     if args.run_ntuplizer:
         threads = []
-        cmd_stagentuple_train = (cmd_stagentuple + ' ' + args.outputfile.replace('.root', '_train.root')
-                              + ' {} {} '.format(0, args.training_frac))
-        cmd_stagentuple_test = (cmd_stagentuple + ' ' + args.outputfile.replace('.root', '_test.root')
-                              + ' {} {} '.format(args.training_frac, 1))
+        cmd_stagentuple_train = cmd_stagentuple
+        cmd_stagentuple_train += ' -o ' + args.outputfile.replace('.root', '_train.root')
+        cmd_stagentuple_train += f' --entry_start 0 --entry_stop {args.training_frac}'
+        cmd_stagentuple_test = cmd_stagentuple
+        cmd_stagentuple_test += ' -o ' + args.outputfile.replace('.root', '_test.root')
+        cmd_stagentuple_test += f' --entry_start {args.training_frac} --entry_stop 1'
         msg = f'Now running stage 2:\n{cmd_stagentuple_train}\n{cmd_stagentuple_test}'
         if stdout is None: print(msg)
         else: stdout.write(msg+'\n')
