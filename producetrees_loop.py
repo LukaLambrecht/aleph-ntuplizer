@@ -41,12 +41,6 @@ if __name__ == '__main__':
     print(f'Found following input files ({len(input_files)}):')
     for f in input_files: print(f'  - {f}')
 
-    # compile makentuples
-    if args.run_ntuplizer:
-        cmd_compile = "g++ -o makentuples makentuples.cpp `root-config --cflags --libs` -Wall"
-        print('Compiling makentuples...')
-        subprocess.check_call(cmd_compile, shell = True, stdout=None, stderr=None)
-
     # make output directory
     if os.path.exists(args.outputdir):
         msg = f'Output directory {args.outputdir} already exists; clean? (y/n)'
@@ -88,7 +82,7 @@ if __name__ == '__main__':
             print(cmd)
             os.system(cmd)
     elif args.runmode=='condor':
-        env_script = os.path.abspath('../setup.sh')
+        env_script = os.path.abspath('setup.sh')
         env_cmd = f'source {env_script}'
         ct.submitCommandsAsCondorCluster('cjob_producetrees', cmds,
           jobflavour='nextweek', conda_activate=env_cmd) 
