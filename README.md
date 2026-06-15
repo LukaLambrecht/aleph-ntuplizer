@@ -6,7 +6,7 @@ These scripts are intended to produce training and testing ntuples for a Particl
 
 This happens in two stages:
 - `analysis.py`: Read the input data and calculate all properties of interest, stored in a per-event format.
-- `makentuples.cpp`: Store all variables in per-jet ntuples ready for training a jet flavour classifier.
+- `makentuples.py`: Store all variables in per-jet ntuples ready for training a jet flavour classifier.
 
 
 ### Status
@@ -72,4 +72,4 @@ as my subsequent analysis code is based on the per-event ntuples rather than the
 
 
 ### To do
-- Make it more modular, allowing to disable some parts of the reconstruction with simple switches (for quicker testing). Currently it has to be done by commenting out parts in `analysis.py` and even then one cannot run the whole chain as `makentuples.cc` has all branches hard-coded and crashes if some of them are not found.
+- Make it more modular, allowing to disable some parts of the reconstruction with simple switches (for quicker testing). Currently it has to be done by defining and setting some global flag variables in `analysis.py`.

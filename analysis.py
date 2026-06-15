@@ -230,11 +230,6 @@ class RDFanalysis():
 
     def analysers(df):
 
-        # hard-coded settings
-        # (maybe add as command line args later?)
-        do_secondary_vertices = False
-        do_v0_candidates = False
-
         # initialization
         dfout = df
 
