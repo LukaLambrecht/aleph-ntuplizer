@@ -25,6 +25,7 @@ if __name__ == '__main__':
       help='Output directory')
     parser.add_argument('--run-ntuplizer', default=False, action='store_true',
       help='Run per-jet ntuplizer stage (default: run only per-event stage)')
+    parser.add_argument('--files-per-job', default=1, type=int)
     parser.add_argument('--redirect-stdout', default=False, action='store_true',
       help='Redirect stdout and stderr from the terminal to txt files.')
     parser.add_argument('--do-clean', default=False, action='store_true',
@@ -50,14 +51,32 @@ if __name__ == '__main__':
         os.system(f'rm {os.path.join(args.outputdir, "*")}')
     else: os.makedirs(args.outputdir)
 
+    # group input files by number of files per job
+    input_files_grouped = []
+    idx = 0
+    while idx < len(input_files):
+        batch = input_files[idx:idx+args.files_per_job]
+        input_files_grouped.append(batch)
+        idx += args.files_per_job
+    
+    # ask for confirmation
+    nfiles = len(input_files)
+    njobs = len(input_files_grouped)
+    print(f'Found {nfiles} input files.')
+    print(f'Will submit {njobs} jobs with {args.files_per_job} file(s) each.')
+    print('Continue? (y/n)')
+    go = six.moves.input()
+    if not go=='y': sys.exit()
+
     # loop over input files
     cmds = []
-    for idx, input_file in enumerate(input_files):
+    for idx, input_file_batch in enumerate(input_files_grouped):
 
         # find out if input file is simulation or data
-        # (only used for output file naming)
-        if 'QQB' in input_file: dtype = 'qqb'
-        elif 'DATA' in input_file: dtype = 'data'
+        # (only used for output file naming).
+        # note: assume it is the same for all files in the batch!
+        if 'QQB' in input_file_batch[0]: dtype = 'qqb'
+        elif 'DATA' in input_file_batch[0]: dtype = 'data'
         else:
             msg = f'Data type of input file {input_file} not recognized.'
             raise Exception(msg)
@@ -65,9 +84,12 @@ if __name__ == '__main__':
         # make output file name
         outputfile = os.path.join(args.outputdir, f'output_{dtype}_{idx}.root')
 
+        # parse input files
+        input_file_str = ' '.join(input_file_batch)
+
         # make command to run
         cmd = 'python producetrees.py'
-        cmd += f' -i {input_file}'
+        cmd += f' -i {input_file_str}'
         cmd += f' -o {outputfile}'
         if args.run_ntuplizer:
             cmd += ' --run-ntuplizer'
