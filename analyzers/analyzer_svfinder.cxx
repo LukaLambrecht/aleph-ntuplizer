@@ -946,7 +946,7 @@ ROOT::VecOps::RVec<double> constraints_Ks(bool tight) {
     result[0] = 0.1; // widended to include sideband; originally 0.488;
     result[1] = 1.4; // widened to include sideband; originally 0.508;
     result[2] = 0.1; // originally 0.3 [mm]
-    result[3] = 0.0; // widened based on observed values in ALEPH; originally 0.999;
+    result[3] = 0.999; // widened based on observed values in ALEPH; originally 0.999;
   }
   
   return result;
@@ -967,7 +967,7 @@ ROOT::VecOps::RVec<double> constraints_Lambda0(bool tight) {
     result[0] = 0.1; // widened to include sideband; originally 1.106;
     result[1] = 1.4; // widened to include sideband; originally 1.126;
     result[2] = 0.1; // originally 0.3 [mm]
-    result[3] = 0.0; // widened based on observed values in ALEPH; originally 0.999;
+    result[3] = 0.999; // widened based on observed values in ALEPH; originally 0.999;
   }
 
   return result;
