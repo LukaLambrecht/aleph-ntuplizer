@@ -1,0 +1,1 @@
+/eos/experiment/fcc/ee/analyses/case-studies/aleph/FULLSIM/QQB/mini_00001.root
