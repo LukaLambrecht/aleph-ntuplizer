@@ -79,7 +79,17 @@ if __name__=='__main__':
             'DStarCandidates_pi2_pt', 'DStarCandidates_pi2_eta', 'DStarCandidates_pi2_phi', 'DStarCandidates_pi2_charge',
             'DStarCandidates_tr1tr2_deltaR', 'DStarCandidates_tr3d0_deltaR',
             'DStarCandidates_d0vtx_chi2Normalized', 'DStarCandidates_dstarvtx_chi2Normalized',
-            'DStarCandidates_hasGenMatch',
+            'DStarCandidates_isOppositeSign', 'DStarCandidates_hasGenMatch',
+
+            # BCandidates_* are likewise a flat, event-level collection (one entry per
+            # semileptonic B tag candidate), same reasoning as DStarCandidates_* above.
+            'Event_nBCandidates',
+            'BCandidates_dstar_idx',
+            'BCandidates_lepton_pt', 'BCandidates_lepton_eta', 'BCandidates_lepton_phi',
+            'BCandidates_lepton_charge', 'BCandidates_lepton_type',
+            'BCandidates_mass', 'BCandidates_pt', 'BCandidates_eta', 'BCandidates_phi',
+            'BCandidates_dstarlepton_deltaR', 'BCandidates_isRightSign',
+            'BCandidates_bvtx_chi2Normalized', 'BCandidates_hasGenMatch',
         ]
         if col in skipcols: continue
  

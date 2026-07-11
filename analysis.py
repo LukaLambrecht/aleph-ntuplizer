@@ -89,6 +89,13 @@ ROOT.gInterpreter.Declare(f'#include "{analyzer_path}"')
 analyzer_path = os.path.join(os.path.dirname(__file__), 'analyzers', 'analyzer_dstarfinder.cxx')
 ROOT.gInterpreter.Declare(f'#include "{analyzer_path}"')
 
+# load custom analyzer with semileptonic B meson finding tools
+# note: must be declared after analyzer_svfinder.cxx (for VertexFitterMod); does not
+# need to be declared relative to analyzer_dstarfinder.cxx since it #includes that file
+# directly itself (safe, since that file has its own top-level include guard).
+analyzer_path = os.path.join(os.path.dirname(__file__), 'analyzers', 'analyzer_bmesonfinder.cxx')
+ROOT.gInterpreter.Declare(f'#include "{analyzer_path}"')
+
 # load custom analyzer with dE/dx tools
 analyzer_path = os.path.join(os.path.dirname(__file__), 'analyzers', 'analyzer_dEdx.cxx')
 ROOT.gInterpreter.Declare(f'#include "{analyzer_path}"')
@@ -213,6 +220,7 @@ ROOT.gInterpreter.Declare("""
 do_secondary_vertices = False
 do_v0_candidates = False
 do_dstar_candidates = True
+do_bmeson_candidates = True
 
 
 # main analyzer class
@@ -623,11 +631,18 @@ class RDFanalysis():
         # note: this is a flat, event-level collection (not distributed over jets,
         # unlike SecondaryVertices/V0Candidates above), since D* candidates are not
         # meaningfully associated to a single jet.
+        # note: the raw candidates are computed whenever D* finding and/or B finding is
+        # switched on, since the B finder (below) reuses these D* candidates rather
+        # than re-running the same combinatorial search; do_dstar_candidates only
+        # controls whether the DStarCandidates_* branches themselves are written out.
+        if do_dstar_candidates or do_bmeson_candidates:
+          dfout = dfout.Define("DStarCandidatesRaw",
+            "DStarMesonFinder::getDStarCandidates(ReconstructedParticles, EFlowTrack_1, EFlowTrack)")
+
         if do_dstar_candidates:
           dfout = (
             dfout
 
-            .Define("DStarCandidatesRaw", "DStarMesonFinder::getDStarCandidates(ReconstructedParticles, EFlowTrack_1, EFlowTrack)")
             .Define("DStarCandidates_mass", "DStarCandidatesRaw.mass")
             .Define("DStarCandidates_pt", "DStarCandidatesRaw.pt")
             .Define("DStarCandidates_eta", "DStarCandidatesRaw.eta")
@@ -653,6 +668,7 @@ class RDFanalysis():
             .Define("DStarCandidates_tr3d0_deltaR", "DStarCandidatesRaw.tr3d0_deltaR")
             .Define("DStarCandidates_d0vtx_chi2Normalized", "DStarCandidatesRaw.d0vtx_chi2Normalized")
             .Define("DStarCandidates_dstarvtx_chi2Normalized", "DStarCandidatesRaw.dstarvtx_chi2Normalized")
+            .Define("DStarCandidates_isOppositeSign", "DStarCandidatesRaw.isOppositeSign")
 
             # store counter
             .Define("Event_nDStarCandidates", "DStarCandidatesRaw.mass.size()")
@@ -668,6 +684,47 @@ class RDFanalysis():
           else:
               dfout = dfout.Define("DStarCandidates_hasGenMatch",
                 "DStarMesonFinder::matchToGenDStarDummy(DStarCandidates_pt)")
+
+        # find the "tag side" of semileptonic B -> D* l nu decays
+        # (D* -> D0 pi -> K pi pi, plus a nearby lepton with the standard charge
+        # correlation); see analyzer_bmesonfinder.cxx for details and caveats.
+        # note: reuses DStarCandidatesRaw (see above) rather than re-running the D*
+        # search; this works correctly regardless of whether do_dstar_candidates
+        # itself is switched on.
+        if do_bmeson_candidates:
+          dfout = (
+            dfout
+
+            .Define("BCandidatesRaw",
+              "BMesonFinder::getBCandidates(DStarCandidatesRaw, ReconstructedParticles, EFlowTrack_1, EFlowTrack, ParticleIDs)")
+            .Define("BCandidates_dstar_idx", "BCandidatesRaw.dstar_idx")
+            .Define("BCandidates_lepton_pt", "BCandidatesRaw.lepton_pt")
+            .Define("BCandidates_lepton_eta", "BCandidatesRaw.lepton_eta")
+            .Define("BCandidates_lepton_phi", "BCandidatesRaw.lepton_phi")
+            .Define("BCandidates_lepton_charge", "BCandidatesRaw.lepton_charge")
+            .Define("BCandidates_lepton_type", "BCandidatesRaw.lepton_type")
+            .Define("BCandidates_mass", "BCandidatesRaw.mass")
+            .Define("BCandidates_pt", "BCandidatesRaw.pt")
+            .Define("BCandidates_eta", "BCandidatesRaw.eta")
+            .Define("BCandidates_phi", "BCandidatesRaw.phi")
+            .Define("BCandidates_dstarlepton_deltaR", "BCandidatesRaw.dstarlepton_deltaR")
+            .Define("BCandidates_isRightSign", "BCandidatesRaw.isRightSign")
+            .Define("BCandidates_bvtx_chi2Normalized", "BCandidatesRaw.bvtx_chi2Normalized")
+
+            # store counter
+            .Define("Event_nBCandidates", "BCandidatesRaw.mass.size()")
+          )
+
+          # "poor man's" gen-level match, same approach and caveats as for D* above,
+          # but against gen-level B0/B+ (PDG 511/521); also see the file docstring in
+          # analyzer_bmesonfinder.cxx for how this doubles as an empirical check of the
+          # assumed lepton charge convention.
+          if dtype=='sim':
+              dfout = dfout.Define("BCandidates_hasGenMatch",
+                "BMesonFinder::matchToGenB(BCandidatesRaw.dstar_idx, DStarCandidatesRaw, Particle)")
+          else:
+              dfout = dfout.Define("BCandidates_hasGenMatch",
+                "BMesonFinder::matchToGenBDummy(BCandidatesRaw.dstar_idx)")
 
         # store the PDG ID of every jet constituent
         # (or at least every particle for which it is available, see more details in the helper function)
@@ -1033,7 +1090,28 @@ class RDFanalysis():
             'DStarCandidates_tr3d0_deltaR',
             'DStarCandidates_d0vtx_chi2Normalized',
             'DStarCandidates_dstarvtx_chi2Normalized',
+            'DStarCandidates_isOppositeSign',
             'DStarCandidates_hasGenMatch',
+          ]
+
+        # B candidate (semileptonic tag) variables
+        if do_bmeson_candidates:
+          branchList += [
+            'Event_nBCandidates',
+            'BCandidates_dstar_idx',
+            'BCandidates_lepton_pt',
+            'BCandidates_lepton_eta',
+            'BCandidates_lepton_phi',
+            'BCandidates_lepton_charge',
+            'BCandidates_lepton_type',
+            'BCandidates_mass',
+            'BCandidates_pt',
+            'BCandidates_eta',
+            'BCandidates_phi',
+            'BCandidates_dstarlepton_deltaR',
+            'BCandidates_isRightSign',
+            'BCandidates_bvtx_chi2Normalized',
+            'BCandidates_hasGenMatch',
           ]
 
         # jet-constituent-level variables

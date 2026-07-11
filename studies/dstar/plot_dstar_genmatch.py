@@ -20,6 +20,15 @@
 # in analyzers/analyzer_geneventtype.cxx), i.e. 1-3 for d/u/s (light), 4 for c, 5 for b.
 # "other (light)" below groups 1-3 together, plus anything not in {4, 5} as a catch-all
 # (e.g. failed classification, or data), so the three panels always add up to the total.
+#
+# Note on the same-sign overlay: DStarCandidates_isOppositeSign is False for K/pi2
+# candidates built from a same-charge pair (kept purely as a combinatorial background
+# estimate, see analyzer_dstarfinder.cxx -- same idea as the right-sign/wrong-sign
+# check for the B candidates, but for the D0 K-pi combination itself). It is drawn
+# as an unfilled step histogram on the same axes as the (opposite-sign) signal
+# candidates, not split by gen-match (gen-matching a same-charge fake is not
+# meaningful) and not normalized to anything -- just the raw same-sign yield, for a
+# direct visual comparison of shape and level against the opposite-sign peak.
 
 
 import os
@@ -42,12 +51,14 @@ if __name__=='__main__':
         raise Exception('Please provide at least one input file (stage-1 ntuple).')
 
     # read input files
+    branches = ['genEventType', 'DStarCandidates_d0_massDiff', 'DStarCandidates_hasGenMatch',
+                'DStarCandidates_isOppositeSign']
     batches = []
     for idx, inputfile in enumerate(inputfiles):
         print(f'Reading file {idx+1} / {len(inputfiles)}...')
         readstr = ':'.join([inputfile, treename])
         with uproot.open(readstr) as f:
-            batches.append(f.arrays(['genEventType', 'DStarCandidates_d0_massDiff', 'DStarCandidates_hasGenMatch']))
+            batches.append(f.arrays(branches))
     events = ak.concatenate(batches)
     print(f'Read {len(events)} events.')
 
@@ -56,9 +67,12 @@ if __name__=='__main__':
     genEventType_bcast, _ = ak.broadcast_arrays(events['genEventType'], events['DStarCandidates_d0_massDiff'])
     massdiff = ak.to_numpy(ak.flatten(events['DStarCandidates_d0_massDiff']))
     matched = ak.to_numpy(ak.flatten(events['DStarCandidates_hasGenMatch']))
+    oppositesign = ak.to_numpy(ak.flatten(events['DStarCandidates_isOppositeSign']))
     evttype = ak.to_numpy(ak.flatten(genEventType_bcast))
     print(f'Found {len(massdiff)} D* candidates'
-          + f' ({matched.sum()} gen-matched, {(~matched).sum()} not matched).')
+          + f' ({oppositesign.sum()} opposite-sign, {(~oppositesign).sum()} same-sign);'
+          + f' among opposite-sign: {matched[oppositesign].sum()} gen-matched,'
+          + f' {(~matched[oppositesign]).sum()} not matched.')
 
     # define flavour categories (see note above on genEventType)
     categories = {
@@ -70,10 +84,13 @@ if __name__=='__main__':
     # make one panel per category
     fig, axs = plt.subplots(1, len(categories), figsize=(6*len(categories), 5), sharey=True)
     for ax, (label, mask) in zip(axs, categories.items()):
-        cand_massdiff = massdiff[mask]
-        cand_matched = matched[mask]
-        print(f'  {label}: {mask.sum()} candidates'
-              + f' ({cand_matched.sum()} gen-matched, {(~cand_matched).sum()} not matched).')
+        os_mask = mask & oppositesign
+        ss_mask = mask & ~oppositesign
+        cand_massdiff = massdiff[os_mask]
+        cand_matched = matched[os_mask]
+        print(f'  {label}: {os_mask.sum()} opposite-sign candidates'
+              + f' ({cand_matched.sum()} gen-matched, {(~cand_matched).sum()} not matched),'
+              + f' {ss_mask.sum()} same-sign candidates.')
 
         ax.hist(
             [cand_massdiff[~cand_matched], cand_massdiff[cand_matched]],
@@ -81,6 +98,11 @@ if __name__=='__main__':
             color=['lightgray', 'dodgerblue'],
             label=['not gen-matched', 'gen-matched (proxy)'],
             edgecolor='black', linewidth=0.5,
+        )
+        ax.hist(
+            massdiff[ss_mask], bins=bins,
+            histtype='step', color='black', linewidth=1.5,
+            label='same-sign (background estimate)',
         )
         ax.axvline(0.14543, color='red', linestyle='--', linewidth=1, label='PDG D*-D0 mass diff')
         ax.set_xlabel('D* - D0 mass difference [GeV]', fontsize=13)

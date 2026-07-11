@@ -99,6 +99,22 @@ struct DStarCandidates{
     ROOT::VecOps::RVec<float> tr3d0_deltaR;
     ROOT::VecOps::RVec<float> d0vtx_chi2Normalized;
     ROOT::VecOps::RVec<float> dstarvtx_chi2Normalized;
+
+    // true for genuine opposite-charge K/pi2 candidates (signal-like); false for
+    // same-charge candidates, which are kept alongside as a combinatorial background
+    // estimate (see getDStarCandidates) and should generally be excluded from anything
+    // downstream that assumes a genuine D0 (e.g. the B finder only uses candidates
+    // with isOppositeSign == true).
+    ROOT::VecOps::RVec<bool> isOppositeSign;
+
+    // indices into ReconstructedParticles for the 3 decay products, one entry per
+    // candidate. For internal cross-referencing only (e.g. by BMesonFinder, to reuse
+    // an already-found D* candidate's tracks without re-deriving them); not meant to
+    // be exposed as their own ntuple branches, since a bare RP index has no standalone
+    // meaning without the RP collection itself also being saved.
+    ROOT::VecOps::RVec<int> k_idx;
+    ROOT::VecOps::RVec<int> pi2_idx;
+    ROOT::VecOps::RVec<int> pi1_idx;
 };
 
 // helper: same track quality selection as TrackTools::getSelectedTracks
@@ -163,8 +179,12 @@ DStarCandidates getDStarCandidates(
             const auto& rp1 = recoParticles[i];
             const auto& rp2 = recoParticles[j];
 
-            // candidates must have opposite charge
-            if(rp1.charge * rp2.charge > 0) continue;
+            // same-charge pairs are kept (rather than required to be opposite-charge)
+            // to additionally provide a same-sign combinatorial background estimate,
+            // following the same approach as the reference implementation (see file
+            // docstring); isOppositeSign is stored per-candidate below so downstream
+            // code (e.g. the B finder) can select on it rather than have it hard-cut here.
+            bool isOppositeSign = (rp1.charge * rp2.charge) < 0;
 
             TLorentzVector p1; p1.SetXYZM(rp1.momentum.x, rp1.momentum.y, rp1.momentum.z, rp1.mass);
             TLorentzVector p2; p2.SetXYZM(rp2.momentum.x, rp2.momentum.y, rp2.momentum.z, rp2.mass);
@@ -173,9 +193,15 @@ DStarCandidates getDStarCandidates(
             double dR12 = p1.DeltaR(p2);
             if(dR12 > maxTrackPairDeltaR) continue;
 
-            // find which track is positive and which is negative
-            int posIdx = (rp1.charge > 0) ? i : j;
-            int negIdx = (rp1.charge > 0) ? j : i;
+            // find which track plays the "positive" and "negative" role in the K/pi
+            // mass-hypothesis test below. For opposite-charge pairs this follows the
+            // actual physical charge; for same-charge pairs (kept only for the
+            // combinatorial background estimate, see above) there is no physical
+            // meaning to this assignment either way, so it is fixed deterministically
+            // by track index instead of the reference implementation's random choice
+            // (for reproducibility; the choice is arbitrary in this case regardless).
+            int posIdx = isOppositeSign ? ((rp1.charge > 0) ? i : j) : i;
+            int negIdx = isOppositeSign ? ((rp1.charge > 0) ? j : i) : j;
             const auto& rpPos = recoParticles[posIdx];
             const auto& rpNeg = recoParticles[negIdx];
 
@@ -277,6 +303,10 @@ DStarCandidates getDStarCandidates(
                 result.tr3d0_deltaR.push_back(dR3D0);
                 result.d0vtx_chi2Normalized.push_back(d0vtxChi2);
                 result.dstarvtx_chi2Normalized.push_back(dstarvtxChi2);
+                result.isOppositeSign.push_back(isOppositeSign);
+                result.k_idx.push_back(kIdx);
+                result.pi2_idx.push_back(pi2Idx);
+                result.pi1_idx.push_back(k);
 
                 if(result.mass.size() >= maxCandidates) return result;
             } // end loop over third track
