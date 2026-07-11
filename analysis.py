@@ -47,6 +47,10 @@ ROOT.gInterpreter.Declare("""
 
 ### end of beamspot handling part ###
 
+# load custom analyzer for gen-level event type retrieval
+analyzer_path = os.path.join(os.path.dirname(__file__), 'analyzers', 'analyzer_geneventtype.cxx')
+ROOT.gInterpreter.Declare(f'#include "{analyzer_path}"')
+
 # load custom analyzer for particle ID retrieval
 analyzer_path = os.path.join(os.path.dirname(__file__), 'analyzers', 'analyzer_particleid.cxx')
 ROOT.gInterpreter.Declare(f'#include "{analyzer_path}"')
@@ -94,27 +98,6 @@ ROOT.gInterpreter.Declare(f'#include "{analyzer_path}"')
 # load custom analyzer with Aleph impact parameter definitions
 analyzer_path = os.path.join(os.path.dirname(__file__), 'analyzers', 'analyzer_ipalephtools.cc')
 ROOT.gInterpreter.Declare(f'#include "{analyzer_path}"')
-
-# helper function for deriving the gen-level event type.
-# note: for now, only valid with qqbar simulations,
-#       where the event type is between 1 (d dbar) and 5 (b bbar) (see PDG numbering scheme).
-# note: the event type is derived simply from the first quark in the list of MCParticles;
-#       there is in principle no guarantee for any kind of ordering;
-#       we just assume the first quark PDG ID in the MCParticle collection
-#       is the one corresponding to the type of quarks produced in the hard scattering.
-#       to be checked and refined later.
-# note: in the original analyzer that served as source for this one,
-#       the event type needed not to be derived, as the simulation was split per quark flavour,
-#       so instead the event type was just derived from the file name.
-ROOT.gInterpreter.Declare("""
-    int get_genEventType(
-        const ROOT::VecOps::RVec<edm4hep::MCParticleData>& genParticles) {
-        for (const auto& genParticle : genParticles) {
-            int pdgid = std::abs(genParticle.PDG);
-            if( (pdgid >= 1) && (pdgid <= 6) ){ return pdgid; }
-        }
-        return -1;
-    }""")
 
 # helper function for deriving the reco-level event type.
 # for more info on the class bitset encoding this information,
@@ -310,7 +293,7 @@ class RDFanalysis():
                 .Define("GenParticle_genStatus", "MCParticle::get_genStatus(Particle)")
 
                 # get event type (at generator level)
-                .Define("genEventType", "get_genEventType(Particle)")
+                .Define("genEventType", "GenEventType::get_genEventTypeFromFirstQuark(Particle)")
 
                 # get true primary vertex position
                 .Define("GenPrimaryVertexP4", "getMCPV(Particle)")

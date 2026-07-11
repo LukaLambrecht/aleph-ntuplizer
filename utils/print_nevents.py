@@ -14,7 +14,9 @@ if __name__=='__main__':
 
     # get number of events per file
     nevents= {}
-    for inputfile in inputfiles:
+    nfiles = len(inputfiles)
+    for idx, inputfile in enumerate(inputfiles):
+        print(f'Reading file {idx+1} / {nfiles}...', end='\r')
         f = ROOT.TFile.Open(inputfile)
         try:
             # for raw input files in EDM4HEP format

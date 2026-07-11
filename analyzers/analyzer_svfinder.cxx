@@ -324,9 +324,8 @@ get_SV_jets(
             // skip primary tracks
             if(isInPrimary[ctr]) continue;
             // skip tracks that are not belonging to this jet
-            // note: this seems to be a bug? should be != instead of == ?
             if(std::find(this_jet_constituent_indices.begin(), this_jet_constituent_indices.end(), reco_ind_tracks[ctr])
-                == this_jet_constituent_indices.end()){
+                != this_jet_constituent_indices.end()){
 	            tracksInThisJet.push_back(tracks[ctr]);
             }
         }

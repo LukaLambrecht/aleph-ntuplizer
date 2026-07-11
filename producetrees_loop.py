@@ -78,7 +78,7 @@ if __name__ == '__main__':
         if 'QQB' in input_file_batch[0]: dtype = 'qqb'
         elif 'DATA' in input_file_batch[0]: dtype = 'data'
         else:
-            msg = f'Data type of input file {input_file} not recognized.'
+            msg = f'Data type of input file {input_file_batch[0]} not recognized.'
             raise Exception(msg)
 
         # make output file name
@@ -93,7 +93,7 @@ if __name__ == '__main__':
         cmd += f' -o {outputfile}'
         if args.run_ntuplizer:
             cmd += ' --run-ntuplizer'
-        if args.redirect_stdout: cmd += ' --redirect_stdout'
+        if args.redirect_stdout: cmd += ' --redirect-stdout'
         if args.do_clean: cmd += ' --do-clean'
         cmds.append(cmd)
 

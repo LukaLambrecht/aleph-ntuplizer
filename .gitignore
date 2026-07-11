@@ -12,3 +12,6 @@ makentuples
 # compiled or cached python code
 **__pycache__
 **.pyc
+
+# context notes
+CONTEXT_NOTES.md

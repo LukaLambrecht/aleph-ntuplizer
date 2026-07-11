@@ -22,6 +22,17 @@ namespace VertexTools{
 // note: the functions below are not present in FCCAnalyses / VertexingUtils.
 //       should they be added there?
 
+// vector of position of all reconstructed SV (in mm)
+ROOT::VecOps::RVec<TVector3>
+get_position_SV(const ROOT::VecOps::RVec<FCCAnalyses::VertexingUtils::FCCAnalysesVertex>& vertices) {
+    ROOT::VecOps::RVec<TVector3> result;
+    for (FCCAnalyses::VertexingUtils::FCCAnalysesVertex ivtx : vertices) {
+        TVector3 xyz(ivtx.vertex.position[0], ivtx.vertex.position[1], ivtx.vertex.position[2]);
+        result.push_back(xyz);
+    }
+    return result;
+}
+
 // same as above, but only x-coordinate
 ROOT::VecOps::RVec<double>
 get_x_SV(const ROOT::VecOps::RVec<FCCAnalyses::VertexingUtils::FCCAnalysesVertex>& vertices) {

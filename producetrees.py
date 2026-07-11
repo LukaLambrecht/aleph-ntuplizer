@@ -34,7 +34,7 @@ def run_ntuplizer(cmd_stagentuple_train, cmd_stagentuple_test, f_stdout, f_stder
     subprocess.check_call(cmd_stagentuple_train, shell=True, stdout=f_stdout, stderr=f_stderr)
     subprocess.check_call(cmd_stagentuple_test, shell=True, stdout=f_stdout, stderr=f_stderr)
     end_time = time.time()
-    msg = 'Ntuplizing stage runtime: {:.3f}s.'.format(end_time - end_time)
+    msg = 'Ntuplizing stage runtime: {:.3f}s.'.format(end_time - start_time)
     if f_stdout is None: print(msg)
     else: f_stdout.write(msg+'\n')
 
