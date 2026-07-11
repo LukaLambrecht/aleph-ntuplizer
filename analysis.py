@@ -637,7 +637,21 @@ class RDFanalysis():
         # controls whether the DStarCandidates_* branches themselves are written out.
         if do_dstar_candidates or do_bmeson_candidates:
           dfout = dfout.Define("DStarCandidatesRaw",
-            "DStarMesonFinder::getDStarCandidates(ReconstructedParticles, EFlowTrack_1, EFlowTrack)")
+            "DStarMesonFinder::getDStarCandidates(ReconstructedParticles, EFlowTrack_1, EFlowTrack, PrimaryVertexP3)")
+
+          # "poor man's" gen-level match for the D* candidates (see note in
+          # analyzer_dstarfinder.cxx for why this can only be a geometric match on the
+          # whole D* candidate, not on its individual decay products: mother-daughter
+          # gen links are not populated in this dataset). Computed here (whenever
+          # either D*- or B-finding is on) rather than only under do_dstar_candidates,
+          # so the B finder can reuse it (as BCandidates_dstarHasGenMatch below)
+          # without recomputing it a second time when both are switched on.
+          if dtype=='sim':
+              dfout = dfout.Define("DStarCandidatesRawGenMatch",
+                "DStarMesonFinder::matchToGenDStar(DStarCandidatesRaw.pt, DStarCandidatesRaw.eta, DStarCandidatesRaw.phi, DStarCandidatesRaw.mass, Particle)")
+          else:
+              dfout = dfout.Define("DStarCandidatesRawGenMatch",
+                "DStarMesonFinder::matchToGenDStarDummy(DStarCandidatesRaw.pt)")
 
         if do_dstar_candidates:
           dfout = (
@@ -668,22 +682,17 @@ class RDFanalysis():
             .Define("DStarCandidates_tr3d0_deltaR", "DStarCandidatesRaw.tr3d0_deltaR")
             .Define("DStarCandidates_d0vtx_chi2Normalized", "DStarCandidatesRaw.d0vtx_chi2Normalized")
             .Define("DStarCandidates_dstarvtx_chi2Normalized", "DStarCandidatesRaw.dstarvtx_chi2Normalized")
+            .Define("DStarCandidates_d0vtx_dxy", "DStarCandidatesRaw.d0vtx_dxy")
+            .Define("DStarCandidates_d0vtx_dxyz", "DStarCandidatesRaw.d0vtx_dxyz")
+            .Define("DStarCandidates_dstarvtx_dxy", "DStarCandidatesRaw.dstarvtx_dxy")
+            .Define("DStarCandidates_dstarvtx_dxyz", "DStarCandidatesRaw.dstarvtx_dxyz")
             .Define("DStarCandidates_isOppositeSign", "DStarCandidatesRaw.isOppositeSign")
+            # already computed above (shared with the B finder, see note there)
+            .Define("DStarCandidates_hasGenMatch", "DStarCandidatesRawGenMatch")
 
             # store counter
             .Define("Event_nDStarCandidates", "DStarCandidatesRaw.mass.size()")
           )
-
-          # "poor man's" gen-level match (see note in analyzer_dstarfinder.cxx for why
-          # this can only be a geometric match on the whole D* candidate, not on its
-          # individual decay products: mother-daughter gen links are not populated
-          # in this dataset).
-          if dtype=='sim':
-              dfout = dfout.Define("DStarCandidates_hasGenMatch",
-                "DStarMesonFinder::matchToGenDStar(DStarCandidates_pt, DStarCandidates_eta, DStarCandidates_phi, DStarCandidates_mass, Particle)")
-          else:
-              dfout = dfout.Define("DStarCandidates_hasGenMatch",
-                "DStarMesonFinder::matchToGenDStarDummy(DStarCandidates_pt)")
 
         # find the "tag side" of semileptonic B -> D* l nu decays
         # (D* -> D0 pi -> K pi pi, plus a nearby lepton with the standard charge
@@ -696,7 +705,7 @@ class RDFanalysis():
             dfout
 
             .Define("BCandidatesRaw",
-              "BMesonFinder::getBCandidates(DStarCandidatesRaw, ReconstructedParticles, EFlowTrack_1, EFlowTrack, ParticleIDs)")
+              "BMesonFinder::getBCandidates(DStarCandidatesRaw, ReconstructedParticles, EFlowTrack_1, EFlowTrack, ParticleIDs, PrimaryVertexP3)")
             .Define("BCandidates_dstar_idx", "BCandidatesRaw.dstar_idx")
             .Define("BCandidates_lepton_pt", "BCandidatesRaw.lepton_pt")
             .Define("BCandidates_lepton_eta", "BCandidatesRaw.lepton_eta")
@@ -710,6 +719,16 @@ class RDFanalysis():
             .Define("BCandidates_dstarlepton_deltaR", "BCandidatesRaw.dstarlepton_deltaR")
             .Define("BCandidates_isRightSign", "BCandidatesRaw.isRightSign")
             .Define("BCandidates_bvtx_chi2Normalized", "BCandidatesRaw.bvtx_chi2Normalized")
+            .Define("BCandidates_bvtx_dxy", "BCandidatesRaw.bvtx_dxy")
+            .Define("BCandidates_bvtx_dxyz", "BCandidatesRaw.bvtx_dxyz")
+            # whether this candidate's own D* is gen-matched to a real D*(2010),
+            # using exactly the DStarCandidates_hasGenMatch criteria (in fact the same
+            # already-computed array, just looked up by dstar_idx -- no recomputation).
+            # Meant to be used together with BCandidates_hasGenMatch (which instead
+            # checks the D* candidate's proximity to a gen-level B) to see which
+            # combination (or both) works best as a purity handle.
+            .Define("BCandidates_dstarHasGenMatch",
+              "BMesonFinder::lookupByIndex(BCandidatesRaw.dstar_idx, DStarCandidatesRawGenMatch)")
 
             # store counter
             .Define("Event_nBCandidates", "BCandidatesRaw.mass.size()")
@@ -1090,6 +1109,10 @@ class RDFanalysis():
             'DStarCandidates_tr3d0_deltaR',
             'DStarCandidates_d0vtx_chi2Normalized',
             'DStarCandidates_dstarvtx_chi2Normalized',
+            'DStarCandidates_d0vtx_dxy',
+            'DStarCandidates_d0vtx_dxyz',
+            'DStarCandidates_dstarvtx_dxy',
+            'DStarCandidates_dstarvtx_dxyz',
             'DStarCandidates_isOppositeSign',
             'DStarCandidates_hasGenMatch',
           ]
@@ -1111,6 +1134,9 @@ class RDFanalysis():
             'BCandidates_dstarlepton_deltaR',
             'BCandidates_isRightSign',
             'BCandidates_bvtx_chi2Normalized',
+            'BCandidates_bvtx_dxy',
+            'BCandidates_bvtx_dxyz',
+            'BCandidates_dstarHasGenMatch',
             'BCandidates_hasGenMatch',
           ]
 

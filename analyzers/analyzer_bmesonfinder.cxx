@@ -75,6 +75,16 @@ struct BCandidates{
     ROOT::VecOps::RVec<float> dstarlepton_deltaR;
     ROOT::VecOps::RVec<bool>  isRightSign;
     ROOT::VecOps::RVec<float> bvtx_chi2Normalized;
+
+    // distance between the 4-track (K, pi2, slow pion, lepton) common vertex and the
+    // primary vertex. Note: this vertex is a simplification -- physically, the K/pi2
+    // originate from the (displaced) D0 decay point, while the slow pion and lepton
+    // originate from the B decay point itself, so forcing all 4 into one common vertex
+    // mixes those two distinct points rather than cleanly isolating the B decay vertex.
+    // Kept this way since it reuses the fit already done for the chi2 cut, rather than
+    // introducing a separate 2-track (pion+lepton) vertex fit for this purpose.
+    ROOT::VecOps::RVec<float> bvtx_dxy;
+    ROOT::VecOps::RVec<float> bvtx_dxyz;
 };
 
 // internal helper: one raw (D*, lepton) pair before the per-lepton best-candidate
@@ -88,6 +98,7 @@ struct RawBCandidate{
     float dstarlepton_deltaR;
     bool isRightSign;
     float bvtx_chi2Normalized;
+    float bvtx_dxy, bvtx_dxyz;
 };
 
 BCandidates getBCandidates(
@@ -96,6 +107,7 @@ BCandidates getBCandidates(
         const ROOT::VecOps::RVec<edm4hep::TrackState>& trackStates,
         const ROOT::VecOps::RVec<edm4hep::TrackData>& trackDatas,
         const ROOT::VecOps::RVec<edm4hep::ParticleIDData>& particleIDs,
+        const TVector3& primaryVertex,
         double minLeptonPt = 1.0,
         double maxDstarLeptonDeltaR = 0.6,
         double maxVertexChi2Normalized = 5.,
@@ -159,6 +171,12 @@ BCandidates getBCandidates(
             double bvtxChi2 = bvtx.vertex.chi2;
             if(bvtxChi2 < 0. || bvtxChi2 > maxVertexChi2Normalized) continue;
 
+            // distance between the B vertex and the primary vertex (see struct docs)
+            TVector3 bvtxPos(bvtx.vertex.position.x, bvtx.vertex.position.y, bvtx.vertex.position.z);
+            TVector3 bvtxDiff = bvtxPos - primaryVertex;
+            float bvtxDxy = std::sqrt(bvtxDiff.X()*bvtxDiff.X() + bvtxDiff.Y()*bvtxDiff.Y());
+            float bvtxDxyz = bvtxDiff.Mag();
+
             // store the raw candidate
             // right-sign: lepton charge opposite the D* charge (carried by the slow
             // pion), matching the genuine B -> D* l nu chain, e.g. Bbar0 -> D*+ l- nub,
@@ -185,6 +203,8 @@ BCandidates getBCandidates(
             cand.dstarlepton_deltaR = dR;
             cand.isRightSign = isRightSign;
             cand.bvtx_chi2Normalized = bvtxChi2;
+            cand.bvtx_dxy = bvtxDxy;
+            cand.bvtx_dxyz = bvtxDxyz;
             rawCandidates.push_back(cand);
         } // end loop over lepton candidates
     } // end loop over D* candidates
@@ -222,6 +242,8 @@ BCandidates getBCandidates(
         result.dstarlepton_deltaR.push_back(cand.dstarlepton_deltaR);
         result.isRightSign.push_back(cand.isRightSign);
         result.bvtx_chi2Normalized.push_back(cand.bvtx_chi2Normalized);
+        result.bvtx_dxy.push_back(cand.bvtx_dxy);
+        result.bvtx_dxyz.push_back(cand.bvtx_dxyz);
         if(result.mass.size() >= maxCandidates) break;
     }
 
@@ -267,6 +289,17 @@ ROOT::VecOps::RVec<bool> matchToGenB(
 // same as above, but a dummy for running on data (no gen particles available)
 ROOT::VecOps::RVec<bool> matchToGenBDummy(const ROOT::VecOps::RVec<int>& dstar_idx){
     ROOT::VecOps::RVec<bool> result(dstar_idx.size(), false);
+    return result;
+}
+
+// generic helper: look up values[indices[i]] for each i, e.g. to carry the D*-level
+// DStarCandidates_hasGenMatch flag over to the B candidates built from those D*
+// candidates (same criteria, no recomputation -- see analysis.py).
+ROOT::VecOps::RVec<bool> lookupByIndex(
+        const ROOT::VecOps::RVec<int>& indices,
+        const ROOT::VecOps::RVec<bool>& values){
+    ROOT::VecOps::RVec<bool> result;
+    for(int idx : indices){ result.push_back(values[idx]); }
     return result;
 }
 

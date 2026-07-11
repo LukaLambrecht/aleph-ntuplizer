@@ -79,6 +79,8 @@ if __name__=='__main__':
             'DStarCandidates_pi2_pt', 'DStarCandidates_pi2_eta', 'DStarCandidates_pi2_phi', 'DStarCandidates_pi2_charge',
             'DStarCandidates_tr1tr2_deltaR', 'DStarCandidates_tr3d0_deltaR',
             'DStarCandidates_d0vtx_chi2Normalized', 'DStarCandidates_dstarvtx_chi2Normalized',
+            'DStarCandidates_d0vtx_dxy', 'DStarCandidates_d0vtx_dxyz',
+            'DStarCandidates_dstarvtx_dxy', 'DStarCandidates_dstarvtx_dxyz',
             'DStarCandidates_isOppositeSign', 'DStarCandidates_hasGenMatch',
 
             # BCandidates_* are likewise a flat, event-level collection (one entry per
@@ -89,7 +91,8 @@ if __name__=='__main__':
             'BCandidates_lepton_charge', 'BCandidates_lepton_type',
             'BCandidates_mass', 'BCandidates_pt', 'BCandidates_eta', 'BCandidates_phi',
             'BCandidates_dstarlepton_deltaR', 'BCandidates_isRightSign',
-            'BCandidates_bvtx_chi2Normalized', 'BCandidates_hasGenMatch',
+            'BCandidates_bvtx_chi2Normalized', 'BCandidates_bvtx_dxy', 'BCandidates_bvtx_dxyz',
+            'BCandidates_dstarHasGenMatch', 'BCandidates_hasGenMatch',
         ]
         if col in skipcols: continue
  

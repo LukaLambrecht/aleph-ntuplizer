@@ -100,6 +100,27 @@ struct DStarCandidates{
     ROOT::VecOps::RVec<float> d0vtx_chi2Normalized;
     ROOT::VecOps::RVec<float> dstarvtx_chi2Normalized;
 
+    // distance between the D0 vertex (2-track K/pi2 fit) and the primary vertex, and
+    // the same for the D* vertex (3-track fit incl. the soft pion). Both are provided
+    // since it's not obvious a priori which is the better b-vs-c-jet discriminator:
+    // - d0vtx is a clean fit of the true D0 decay point (the K/pi2 genuinely originate
+    //   there), so its distance to the PV is (D0 flight length) for a primary/c-jet D0,
+    //   or (B flight length + D0 flight length) for a b-jet cascade D0 -- always offset
+    //   by at least the D0's own flight length, even for c-jets.
+    // - dstarvtx additionally includes the slow pion, which genuinely originates from
+    //   the D* decay point itself (essentially the D* *production* point too, since the
+    //   D* does not fly any measurable distance) -- i.e. at the primary vertex for a
+    //   prompt/c-jet D*, or at the B decay vertex for a b-jet cascade D*. But since the
+    //   K/pi2 do NOT originate from that same point (they come from the displaced D0
+    //   decay point further downstream), forcing all 3 tracks into one common vertex
+    //   fit is itself an approximation -- the fitted position ends up some resolution-
+    //   weighted compromise between the D* and D0 decay points, not a clean fit of
+    //   either. Which of the two ends up more discriminating is an empirical question.
+    ROOT::VecOps::RVec<float> d0vtx_dxy;  // transverse (x-y) distance
+    ROOT::VecOps::RVec<float> d0vtx_dxyz; // full 3D distance
+    ROOT::VecOps::RVec<float> dstarvtx_dxy;
+    ROOT::VecOps::RVec<float> dstarvtx_dxyz;
+
     // true for genuine opposite-charge K/pi2 candidates (signal-like); false for
     // same-charge candidates, which are kept alongside as a combinatorial background
     // estimate (see getDStarCandidates) and should generally be excluded from anything
@@ -140,6 +161,7 @@ DStarCandidates getDStarCandidates(
         const ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData>& recoParticles,
         const ROOT::VecOps::RVec<edm4hep::TrackState>& trackStates,
         const ROOT::VecOps::RVec<edm4hep::TrackData>& trackDatas,
+        const TVector3& primaryVertex,
         double minTrackPt = 0.3,
         double minKaonPt = 1.0,
         double minSoftPionPt = 0.5,
@@ -247,6 +269,12 @@ DStarCandidates getDStarCandidates(
             double d0vtxChi2 = d0vtx.vertex.chi2;
             if(d0vtxChi2 < 0. || d0vtxChi2 > maxVertexChi2Normalized) continue;
 
+            // distance between the D0 vertex and the primary vertex (see struct docs)
+            TVector3 d0vtxPos(d0vtx.vertex.position.x, d0vtx.vertex.position.y, d0vtx.vertex.position.z);
+            TVector3 d0vtxDiff = d0vtxPos - primaryVertex;
+            float d0vtxDxy = std::sqrt(d0vtxDiff.X()*d0vtxDiff.X() + d0vtxDiff.Y()*d0vtxDiff.Y());
+            float d0vtxDxyz = d0vtxDiff.Mag();
+
             // loop over third track (soft pion candidate)
             for(size_t kk = 0; kk < selectedIndices.size(); kk++){
                 int k = selectedIndices[kk];
@@ -277,6 +305,12 @@ DStarCandidates getDStarCandidates(
                 double dstarvtxChi2 = dstarvtx.vertex.chi2;
                 if(dstarvtxChi2 < 0. || dstarvtxChi2 > maxVertexChi2Normalized) continue;
 
+                // distance between the D* vertex and the primary vertex (see struct docs)
+                TVector3 dstarvtxPos(dstarvtx.vertex.position.x, dstarvtx.vertex.position.y, dstarvtx.vertex.position.z);
+                TVector3 dstarvtxDiff = dstarvtxPos - primaryVertex;
+                float dstarvtxDxy = std::sqrt(dstarvtxDiff.X()*dstarvtxDiff.X() + dstarvtxDiff.Y()*dstarvtxDiff.Y());
+                float dstarvtxDxyz = dstarvtxDiff.Mag();
+
                 // store the candidate
                 result.mass.push_back(dstarP4.M());
                 result.pt.push_back(dstarP4.Pt());
@@ -303,6 +337,10 @@ DStarCandidates getDStarCandidates(
                 result.tr3d0_deltaR.push_back(dR3D0);
                 result.d0vtx_chi2Normalized.push_back(d0vtxChi2);
                 result.dstarvtx_chi2Normalized.push_back(dstarvtxChi2);
+                result.d0vtx_dxy.push_back(d0vtxDxy);
+                result.d0vtx_dxyz.push_back(d0vtxDxyz);
+                result.dstarvtx_dxy.push_back(dstarvtxDxy);
+                result.dstarvtx_dxyz.push_back(dstarvtxDxyz);
                 result.isOppositeSign.push_back(isOppositeSign);
                 result.k_idx.push_back(kIdx);
                 result.pi2_idx.push_back(pi2Idx);
