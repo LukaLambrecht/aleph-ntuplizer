@@ -64,7 +64,22 @@ if __name__=='__main__':
             'JetsConstituents_trackPCAToJetAxis_x', 'JetsConstituents_trackPCAToJetAxis_y', 'JetsConstituents_trackPCAToJetAxis_z',
             'JetsConstituents_pdgId',
             'JetsConstituents_omega_wrt0', 'JetsConstituents_tanlambda_wrt0',
-            'Jets_px', 'Jets_py', 'Jets_pz'
+            'Jets_px', 'Jets_py', 'Jets_pz',
+
+            # DStarCandidates_* are a flat, event-level collection (one entry per
+            # D* candidate, not per jet); they don't fit the "truncate/repeat to
+            # the leading 2 jets" reshaping below, so skip them here rather than
+            # have them silently mis-truncated/mis-zipped as if jet-indexed.
+            'Event_nDStarCandidates',
+            'DStarCandidates_mass', 'DStarCandidates_pt', 'DStarCandidates_eta', 'DStarCandidates_phi',
+            'DStarCandidates_d0_mass', 'DStarCandidates_d0_pt', 'DStarCandidates_d0_eta', 'DStarCandidates_d0_phi',
+            'DStarCandidates_d0_massDiff',
+            'DStarCandidates_pi1_pt', 'DStarCandidates_pi1_eta', 'DStarCandidates_pi1_phi', 'DStarCandidates_pi1_charge',
+            'DStarCandidates_k_pt', 'DStarCandidates_k_eta', 'DStarCandidates_k_phi', 'DStarCandidates_k_charge',
+            'DStarCandidates_pi2_pt', 'DStarCandidates_pi2_eta', 'DStarCandidates_pi2_phi', 'DStarCandidates_pi2_charge',
+            'DStarCandidates_tr1tr2_deltaR', 'DStarCandidates_tr3d0_deltaR',
+            'DStarCandidates_d0vtx_chi2Normalized', 'DStarCandidates_dstarvtx_chi2Normalized',
+            'DStarCandidates_hasGenMatch',
         ]
         if col in skipcols: continue
  

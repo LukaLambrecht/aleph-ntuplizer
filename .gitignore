@@ -6,8 +6,9 @@ makentuples
 **sjob_*
 **llambrec.cc
 
-# custom output folders
+# custom output folders and files
 **output_*
+**.png
 
 # compiled or cached python code
 **__pycache__

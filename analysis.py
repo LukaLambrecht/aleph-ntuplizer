@@ -83,6 +83,12 @@ ROOT.gInterpreter.Declare(f'#include "{analyzer_path}"')
 analyzer_path = os.path.join(os.path.dirname(__file__), 'analyzers', 'analyzer_svfinder.cxx')
 ROOT.gInterpreter.Declare(f'#include "{analyzer_path}"')
 
+# load custom analyzer with D* meson finding tools
+# note: must be declared after analyzer_svfinder.cxx, since it relies on
+# VertexFitterMod (defined there) already being available.
+analyzer_path = os.path.join(os.path.dirname(__file__), 'analyzers', 'analyzer_dstarfinder.cxx')
+ROOT.gInterpreter.Declare(f'#include "{analyzer_path}"')
+
 # load custom analyzer with dE/dx tools
 analyzer_path = os.path.join(os.path.dirname(__file__), 'analyzers', 'analyzer_dEdx.cxx')
 ROOT.gInterpreter.Declare(f'#include "{analyzer_path}"')
@@ -204,8 +210,9 @@ ROOT.gInterpreter.Declare("""
 
 # dirty hard-coded settings using global variables
 # (try to do more cleanly later, but doesn't seem very trivial with RDFanalysis)
-do_secondary_vertices = True
-do_v0_candidates = True
+do_secondary_vertices = False
+do_v0_candidates = False
+do_dstar_candidates = True
 
 
 # main analyzer class
@@ -612,6 +619,56 @@ class RDFanalysis():
 
           )
 
+        # find D* -> D0 pi -> K pi pi candidates
+        # note: this is a flat, event-level collection (not distributed over jets,
+        # unlike SecondaryVertices/V0Candidates above), since D* candidates are not
+        # meaningfully associated to a single jet.
+        if do_dstar_candidates:
+          dfout = (
+            dfout
+
+            .Define("DStarCandidatesRaw", "DStarMesonFinder::getDStarCandidates(ReconstructedParticles, EFlowTrack_1, EFlowTrack)")
+            .Define("DStarCandidates_mass", "DStarCandidatesRaw.mass")
+            .Define("DStarCandidates_pt", "DStarCandidatesRaw.pt")
+            .Define("DStarCandidates_eta", "DStarCandidatesRaw.eta")
+            .Define("DStarCandidates_phi", "DStarCandidatesRaw.phi")
+            .Define("DStarCandidates_d0_mass", "DStarCandidatesRaw.d0_mass")
+            .Define("DStarCandidates_d0_pt", "DStarCandidatesRaw.d0_pt")
+            .Define("DStarCandidates_d0_eta", "DStarCandidatesRaw.d0_eta")
+            .Define("DStarCandidates_d0_phi", "DStarCandidatesRaw.d0_phi")
+            .Define("DStarCandidates_d0_massDiff", "DStarCandidatesRaw.d0_massDiff")
+            .Define("DStarCandidates_pi1_pt", "DStarCandidatesRaw.pi1_pt")
+            .Define("DStarCandidates_pi1_eta", "DStarCandidatesRaw.pi1_eta")
+            .Define("DStarCandidates_pi1_phi", "DStarCandidatesRaw.pi1_phi")
+            .Define("DStarCandidates_pi1_charge", "DStarCandidatesRaw.pi1_charge")
+            .Define("DStarCandidates_k_pt", "DStarCandidatesRaw.k_pt")
+            .Define("DStarCandidates_k_eta", "DStarCandidatesRaw.k_eta")
+            .Define("DStarCandidates_k_phi", "DStarCandidatesRaw.k_phi")
+            .Define("DStarCandidates_k_charge", "DStarCandidatesRaw.k_charge")
+            .Define("DStarCandidates_pi2_pt", "DStarCandidatesRaw.pi2_pt")
+            .Define("DStarCandidates_pi2_eta", "DStarCandidatesRaw.pi2_eta")
+            .Define("DStarCandidates_pi2_phi", "DStarCandidatesRaw.pi2_phi")
+            .Define("DStarCandidates_pi2_charge", "DStarCandidatesRaw.pi2_charge")
+            .Define("DStarCandidates_tr1tr2_deltaR", "DStarCandidatesRaw.tr1tr2_deltaR")
+            .Define("DStarCandidates_tr3d0_deltaR", "DStarCandidatesRaw.tr3d0_deltaR")
+            .Define("DStarCandidates_d0vtx_chi2Normalized", "DStarCandidatesRaw.d0vtx_chi2Normalized")
+            .Define("DStarCandidates_dstarvtx_chi2Normalized", "DStarCandidatesRaw.dstarvtx_chi2Normalized")
+
+            # store counter
+            .Define("Event_nDStarCandidates", "DStarCandidatesRaw.mass.size()")
+          )
+
+          # "poor man's" gen-level match (see note in analyzer_dstarfinder.cxx for why
+          # this can only be a geometric match on the whole D* candidate, not on its
+          # individual decay products: mother-daughter gen links are not populated
+          # in this dataset).
+          if dtype=='sim':
+              dfout = dfout.Define("DStarCandidates_hasGenMatch",
+                "DStarMesonFinder::matchToGenDStar(DStarCandidates_pt, DStarCandidates_eta, DStarCandidates_phi, DStarCandidates_mass, Particle)")
+          else:
+              dfout = dfout.Define("DStarCandidates_hasGenMatch",
+                "DStarMesonFinder::matchToGenDStarDummy(DStarCandidates_pt)")
+
         # store the PDG ID of every jet constituent
         # (or at least every particle for which it is available, see more details in the helper function)
         if dtype=='sim':
@@ -945,6 +1002,38 @@ class RDFanalysis():
             'V0Candidates_dxyz',
             'V0Candidates_cosPointing',
             'V0Candidates_correctedMass',
+          ]
+
+        # D* candidate variables
+        if do_dstar_candidates:
+          branchList += [
+            'Event_nDStarCandidates',
+            'DStarCandidates_mass',
+            'DStarCandidates_pt',
+            'DStarCandidates_eta',
+            'DStarCandidates_phi',
+            'DStarCandidates_d0_mass',
+            'DStarCandidates_d0_pt',
+            'DStarCandidates_d0_eta',
+            'DStarCandidates_d0_phi',
+            'DStarCandidates_d0_massDiff',
+            'DStarCandidates_pi1_pt',
+            'DStarCandidates_pi1_eta',
+            'DStarCandidates_pi1_phi',
+            'DStarCandidates_pi1_charge',
+            'DStarCandidates_k_pt',
+            'DStarCandidates_k_eta',
+            'DStarCandidates_k_phi',
+            'DStarCandidates_k_charge',
+            'DStarCandidates_pi2_pt',
+            'DStarCandidates_pi2_eta',
+            'DStarCandidates_pi2_phi',
+            'DStarCandidates_pi2_charge',
+            'DStarCandidates_tr1tr2_deltaR',
+            'DStarCandidates_tr3d0_deltaR',
+            'DStarCandidates_d0vtx_chi2Normalized',
+            'DStarCandidates_dstarvtx_chi2Normalized',
+            'DStarCandidates_hasGenMatch',
           ]
 
         # jet-constituent-level variables
