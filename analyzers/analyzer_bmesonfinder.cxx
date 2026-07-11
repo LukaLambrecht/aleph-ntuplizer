@@ -15,12 +15,18 @@
 // this file never repeats that combinatorial search itself.
 //
 // Note on the lepton charge convention: the standard "right-sign" combination is
-// lepton charge opposite the D* candidate's kaon charge (equivalently, same sign as
-// the soft pion). This is stored as a flag (isRightSign) rather than applied as a hard
-// cut, so wrong-sign candidates remain available as the standard background/mixing
-// control sample. The convention itself is recalled from memory, not pulled from a
-// live reference -- it should be checked empirically (e.g. gen-matched candidates
-// should be predominantly right-sign) before being trusted for an actual analysis.
+// lepton charge opposite the D* charge, which is carried by the slow pion (equivalently,
+// the *same* sign as the kaon) -- e.g. Bbar0 -> D*+ l- nubar, D*+ -> D0 pi+: the l- and
+// the pi+ have opposite charge. This matches the literature notation of pairing
+// candidates as "D*+ l-" (right-sign) vs. "D*+ l+" (wrong-sign), i.e. against the
+// D*/slow-pion charge. (An earlier version of this file paired against the kaon charge
+// instead, which is backwards -- caught by inspecting the decay chain directly rather
+// than trusting a recalled convention; the general lesson stands, this is easy to get
+// wrong from memory, so this too should still be checked empirically, e.g. gen-matched
+// candidates should be predominantly right-sign, before being trusted for an actual
+// analysis.) This is stored as a flag (isRightSign) rather than applied as a hard cut,
+// so wrong-sign candidates remain available as the standard background/mixing control
+// sample.
 
 #include <ROOT/RVec.hxx>
 #include <cmath>
@@ -119,7 +125,7 @@ BCandidates getBCandidates(
         int kIdx = dstarCandidates.k_idx[d];
         int pi2Idx = dstarCandidates.pi2_idx[d];
         int pi1Idx = dstarCandidates.pi1_idx[d];
-        int kCharge = dstarCandidates.k_charge[d];
+        int pi1Charge = dstarCandidates.pi1_charge[d]; // slow pion charge = D* charge
 
         // loop over reco particles to find a lepton candidate
         for(size_t idx = 0; idx < recoParticles.size(); idx++){
@@ -154,8 +160,15 @@ BCandidates getBCandidates(
             if(bvtxChi2 < 0. || bvtxChi2 > maxVertexChi2Normalized) continue;
 
             // store the raw candidate
+            // right-sign: lepton charge opposite the D* charge (carried by the slow
+            // pion), matching the genuine B -> D* l nu chain, e.g. Bbar0 -> D*+ l- nub,
+            // D*+ -> D0 pi+: the lepton (l-) and the slow pion (pi+) have opposite
+            // charge (equivalently, the lepton has the *same* charge as the kaon).
+            // This is also how the literature notation "D*+ l-" (right-sign) vs.
+            // "D*+ l+" (wrong-sign) pairs them: against the D*/slow-pion charge, not
+            // the kaon.
             TLorentzVector visibleP4 = dstarP4 + leptonP4;
-            bool isRightSign = (rp.charge * kCharge) < 0;
+            bool isRightSign = (rp.charge * pi1Charge) < 0;
 
             RawBCandidate cand;
             cand.dstar_idx = (int)d;
