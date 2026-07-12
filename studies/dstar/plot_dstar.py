@@ -37,6 +37,15 @@
 # (from c-jets, where the D* is produced directly at the primary vertex) from
 # displaced D* decays (where the D* is a decay product of a B meson that itself
 # travelled some distance first).
+#
+# Note on units: despite various code comments in analyzer_svfinder.cxx / the FCCAnalyses
+# VertexingUtils helpers claiming vertex positions are "in mm", they are actually in cm for
+# this dataset. analyzer_tracktools.cxx has a (deliberately disabled) cm->mm conversion for
+# the raw D0/Z0 track parameters ("keep everything in cm here... to stay in sync with earlier
+# version"), and the vertex fit (VertexFitterMod) is told Units_mm=true, which in FCCAnalyses
+# just means "don't rescale the input" -- so cm in, cm out. Cross-checked empirically: the
+# reconstructed beam-spot spread (GenPV_x/y std) only matches the known ALEPH/LEP beam size
+# (sigma_x ~ 150 um, sigma_y ~ 6 um) if the raw numbers are interpreted as cm, not mm.
 
 
 import os
@@ -143,6 +152,6 @@ if __name__=='__main__':
     make_stacked_plot(
         dstarvtx_dxyz, matched, oppositesign, evttype,
         bins=np.linspace(0, 1.0, 51),
-        xlabel='D* vertex - primary vertex distance [mm]',
+        xlabel='D* vertex - primary vertex distance [cm]',
         outputfile='dstar_vtxdistance.png',
     )
