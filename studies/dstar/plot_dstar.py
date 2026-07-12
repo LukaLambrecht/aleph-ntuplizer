@@ -1,5 +1,6 @@
-# Plot the D* - D0 mass difference, split into gen-matched and non-matched candidates,
-# with separate panels per gen-level event flavour (bb, cc, other/light).
+# Plot D* candidate properties (mass difference, vertex distance to the primary
+# vertex), split into gen-matched and non-matched candidates, with separate panels
+# per gen-level event flavour (bb, cc, other/light).
 #
 # This requires stage-1 ntuples produced with do_dstar_candidates = True on simulation
 # (DStarCandidates_hasGenMatch is a dummy False for data, so running this on data
@@ -29,6 +30,13 @@
 # candidates, not split by gen-match (gen-matching a same-charge fake is not
 # meaningful) and not normalized to anything -- just the raw same-sign yield, for a
 # direct visual comparison of shape and level against the opposite-sign peak.
+#
+# Note on the D* vertex distance: DStarCandidates_dstarvtx_dxyz is the 3D distance
+# between the fitted D* (K, pi2, slow pi) vertex and the primary vertex, i.e. how far
+# the D* travelled before decaying. This is used to separate almost-prompt D* decays
+# (from c-jets, where the D* is produced directly at the primary vertex) from
+# displaced D* decays (where the D* is a decay product of a B meson that itself
+# travelled some distance first).
 
 
 import os
@@ -39,20 +47,65 @@ import awkward as ak
 import matplotlib.pyplot as plt
 
 
+def make_stacked_plot(values, matched, oppositesign, evttype, bins,
+                       xlabel, outputfile, refline=None):
+    '''
+    Make one panel per flavour category, each showing a stacked gen-matched /
+    non-matched histogram of values (for opposite-sign candidates only), plus an
+    unfilled step histogram of the same-sign background estimate.
+    '''
+    categories = {
+        'bb events': (evttype == 5),
+        'cc events': (evttype == 4),
+        'uu / dd / ss events': ~np.isin(evttype, [4, 5]),
+    }
+
+    fig, axs = plt.subplots(1, len(categories), figsize=(6*len(categories), 5), sharey=True)
+    for ax, (label, mask) in zip(axs, categories.items()):
+        os_mask = mask & oppositesign
+        ss_mask = mask & ~oppositesign
+        cand_values = values[os_mask]
+        cand_matched = matched[os_mask]
+        print(f'  {label}: {os_mask.sum()} opposite-sign candidates'
+              + f' ({cand_matched.sum()} gen-matched, {(~cand_matched).sum()} not matched),'
+              + f' {ss_mask.sum()} same-sign candidates.')
+
+        ax.hist(
+            [cand_values[~cand_matched], cand_values[cand_matched]],
+            bins=bins, stacked=True,
+            color=['lightgray', 'dodgerblue'],
+            label=['not gen-matched', 'gen-matched (proxy)'],
+            edgecolor='black', linewidth=0.5,
+        )
+        ax.hist(
+            values[ss_mask], bins=bins,
+            histtype='step', color='black', linewidth=1.5,
+            label='same-sign (background estimate)',
+        )
+        if refline is not None:
+            ax.axvline(refline[0], color='red', linestyle='--', linewidth=1, label=refline[1])
+        ax.set_xlabel(xlabel, fontsize=13)
+        ax.legend(title=label, fontsize=12,
+                  title_fontproperties={'weight': 'bold', 'size': 13})
+    axs[0].set_ylabel('Candidates / bin', fontsize=13)
+
+    fig.tight_layout()
+    fig.savefig(outputfile, dpi=150)
+    print(f'Output written to {outputfile}.')
+
+
 if __name__=='__main__':
 
     # settings
     inputfiles = sys.argv[1:]
     treename = 'events'
-    outputfile = 'dstar_genmatch_massdiff.png'
-    bins = np.linspace(0.14, 0.20, 61)
 
     if len(inputfiles)==0:
         raise Exception('Please provide at least one input file (stage-1 ntuple).')
 
     # read input files
     branches = ['genEventType', 'DStarCandidates_d0_massDiff', 'DStarCandidates_hasGenMatch',
-                'DStarCandidates_isOppositeSign']
+                'DStarCandidates_isOppositeSign', 'DStarCandidates_dstarvtx_dxyz']
     batches = []
     for idx, inputfile in enumerate(inputfiles):
         print(f'Reading file {idx+1} / {len(inputfiles)}...')
@@ -66,6 +119,7 @@ if __name__=='__main__':
     # then flatten everything to one entry per D* candidate
     genEventType_bcast, _ = ak.broadcast_arrays(events['genEventType'], events['DStarCandidates_d0_massDiff'])
     massdiff = ak.to_numpy(ak.flatten(events['DStarCandidates_d0_massDiff']))
+    dstarvtx_dxyz = ak.to_numpy(ak.flatten(events['DStarCandidates_dstarvtx_dxyz']))
     matched = ak.to_numpy(ak.flatten(events['DStarCandidates_hasGenMatch']))
     oppositesign = ak.to_numpy(ak.flatten(events['DStarCandidates_isOppositeSign']))
     evttype = ak.to_numpy(ak.flatten(genEventType_bcast))
@@ -74,42 +128,21 @@ if __name__=='__main__':
           + f' among opposite-sign: {matched[oppositesign].sum()} gen-matched,'
           + f' {(~matched[oppositesign]).sum()} not matched.')
 
-    # define flavour categories (see note above on genEventType)
-    categories = {
-        'bb events': (evttype == 5),
-        'cc events': (evttype == 4),
-        'uu / dd / ss events': ~np.isin(evttype, [4, 5]),
-    }
+    # make mass difference plot
+    print('Making mass difference plot...')
+    make_stacked_plot(
+        massdiff, matched, oppositesign, evttype,
+        bins=np.linspace(0.14, 0.20, 61),
+        xlabel='D* - D0 mass difference [GeV]',
+        outputfile='dstar_massdiff.png',
+        refline=(0.14543, 'PDG D*-D0 mass diff'),
+    )
 
-    # make one panel per category
-    fig, axs = plt.subplots(1, len(categories), figsize=(6*len(categories), 5), sharey=True)
-    for ax, (label, mask) in zip(axs, categories.items()):
-        os_mask = mask & oppositesign
-        ss_mask = mask & ~oppositesign
-        cand_massdiff = massdiff[os_mask]
-        cand_matched = matched[os_mask]
-        print(f'  {label}: {os_mask.sum()} opposite-sign candidates'
-              + f' ({cand_matched.sum()} gen-matched, {(~cand_matched).sum()} not matched),'
-              + f' {ss_mask.sum()} same-sign candidates.')
-
-        ax.hist(
-            [cand_massdiff[~cand_matched], cand_massdiff[cand_matched]],
-            bins=bins, stacked=True,
-            color=['lightgray', 'dodgerblue'],
-            label=['not gen-matched', 'gen-matched (proxy)'],
-            edgecolor='black', linewidth=0.5,
-        )
-        ax.hist(
-            massdiff[ss_mask], bins=bins,
-            histtype='step', color='black', linewidth=1.5,
-            label='same-sign (background estimate)',
-        )
-        ax.axvline(0.14543, color='red', linestyle='--', linewidth=1, label='PDG D*-D0 mass diff')
-        ax.set_xlabel('D* - D0 mass difference [GeV]', fontsize=13)
-        ax.legend(title=label, fontsize=12,
-                  title_fontproperties={'weight': 'bold', 'size': 13})
-    axs[0].set_ylabel('Candidates / bin', fontsize=13)
-
-    fig.tight_layout()
-    fig.savefig(outputfile, dpi=150)
-    print(f'Output written to {outputfile}.')
+    # make D* vertex - primary vertex distance plot
+    print('Making D* vertex distance plot...')
+    make_stacked_plot(
+        dstarvtx_dxyz, matched, oppositesign, evttype,
+        bins=np.linspace(0, 1.0, 51),
+        xlabel='D* vertex - primary vertex distance [mm]',
+        outputfile='dstar_vtxdistance.png',
+    )

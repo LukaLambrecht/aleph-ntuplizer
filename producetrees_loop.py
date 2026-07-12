@@ -31,6 +31,7 @@ if __name__ == '__main__':
     parser.add_argument('--do-clean', default=False, action='store_true',
       help='Remove intermediate output after running the ntuplizing stage.')
     parser.add_argument('-r', '--runmode', default='local', choices=['local', 'condor'])
+    parser.add_argument('--jobflavour', default='workday')
     args = parser.parse_args()
 
     # find input files
@@ -106,4 +107,4 @@ if __name__ == '__main__':
         env_script = os.path.abspath('setup.sh')
         env_cmd = f'source {env_script}'
         ct.submitCommandsAsCondorCluster('cjob_producetrees', cmds,
-          jobflavour='nextweek', conda_activate=env_cmd) 
+          jobflavour=args.jobflavour, conda_activate=env_cmd) 
