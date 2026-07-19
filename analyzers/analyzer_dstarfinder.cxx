@@ -1,7 +1,7 @@
 // D* meson finder.
 //
-// Reconstructs D* -> D0 pi -> K pi pi candidates from triplets of tracks
-// (via their associated reconstructed particles).
+// Reconstructs D* -> D0 pi -> K pi pi candidates by combining an already-found D0
+// candidate (see analyzer_dzerofinder.cxx) with a third track (the "soft"/slow pion).
 //
 // Translated from the CMSSW / nanoAOD version at:
 // https://github.com/LukaLambrecht/HcNano/blob/main/HcNano/plugins/HToDStarMesonProducer.cc
@@ -47,6 +47,20 @@
 //   existing SV finder code already relies only on .vertex.chi2 for this
 //   reason (see check_constraints() in analyzer_svfinder.cxx); this file
 //   does the same.
+//
+// Update: the D0-pair-finding half of this file (the K/pi combinatorics, mass
+// hypothesis logic, and D0 vertex fit) has been factored out into
+// analyzer_dzerofinder.cxx, since the bare D0 -> K pi decay turned out to be a
+// more promising b/c-jet calibration channel on its own (much larger branching
+// fraction, at the cost of more combinatorial background -- the D* chain's extra
+// pi-slow leg suppressed the yield too much to be useful here). getDStarCandidates
+// below now takes an already-found DZeroMesonFinder::DZeroCandidates collection as
+// input, exactly the same pattern already used by analyzer_bmesonfinder.cxx (which
+// takes an already-found DStarCandidates collection rather than re-deriving D*
+// candidates itself) -- this lets analysis.py compute the D0 candidates exactly
+// once and share them between the standalone D0 output, the D* finder, and (via the
+// D* finder) the B finder, regardless of which combination of do_dzero_candidates /
+// do_dstar_candidates / do_bmeson_candidates flags is switched on.
 
 #include <ROOT/RVec.hxx>
 #include <cmath>
@@ -60,6 +74,12 @@
 #include <iostream>
 #include <algorithm>
 
+// safe to include: analyzer_dzerofinder.cxx has its own top-level include guard
+// (DZeroMesonFinder_H), so this is a no-op if analysis.py has already separately
+// Declared it (which it must do anyway, after analyzer_svfinder.cxx, whenever
+// do_dzero_candidates/do_dstar_candidates/do_bmeson_candidates need it).
+#include "analyzer_dzerofinder.cxx"
+
 
 #ifndef DStarMesonFinder_H
 #define DStarMesonFinder_H
@@ -68,8 +88,6 @@ namespace DStarMesonFinder{
 
 // particle masses [GeV]
 const double m_pi = 0.13957039;
-const double m_K = 0.493677;
-const double m_D0 = 1.86484;
 const double m_DStar = 2.01026; // D*(2010)+/-
 
 // output collection: one entry per D* candidate found in the event
@@ -138,41 +156,30 @@ struct DStarCandidates{
     ROOT::VecOps::RVec<int> pi1_idx;
 };
 
-// helper: same track quality selection as TrackTools::getSelectedTracks
-// (covariance sanity checks + chi2/ndof), applied here directly on the
-// reco-particle's associated track, plus a minimum pt requirement.
-// kept self-contained rather than factored out, to avoid coupling this file
-// to the exact interface of TrackTools::getSelectedTracks.
-bool isGoodTrack(
-        const edm4hep::TrackState& trst,
-        const edm4hep::TrackData& trkobj,
-        const TVector3& p,
-        double minPt){
-    const auto& c = trst.covMatrix;
-    if (c[0] <= 0 || c[2] <= 0 || c[9] <= 0) return false;
-    if (!std::isfinite(c[0]) || !std::isfinite(c[2]) || !std::isfinite(c[9])) return false;
-    if (trkobj.ndf == 0) return false;
-    if (trkobj.chi2 / trkobj.ndf > 10.) return false;
-    if (p.Pt() < minPt) return false;
-    return true;
-}
+// note: the isGoodTrack track-quality helper and the K/pi pair-finding combinatorics
+// that used to live here have moved to analyzer_dzerofinder.cxx (see DZeroMesonFinder::
+// isGoodTrack / getSelectedIndices / getDZeroCandidates); this file now only adds the
+// third (soft pion) track to an already-found D0 candidate.
 
 DStarCandidates getDStarCandidates(
+        const DZeroMesonFinder::DZeroCandidates& d0Candidates,
         const ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData>& recoParticles,
         const ROOT::VecOps::RVec<edm4hep::TrackState>& trackStates,
         const ROOT::VecOps::RVec<edm4hep::TrackData>& trackDatas,
         const TVector3& primaryVertex,
         double minTrackPt = 0.3,
-        double minKaonPt = 1.0,
         double minSoftPionPt = 0.5,
-        double maxTrackPairDeltaR = 0.4,
-        double d0MassWindow = 0.035,
         double dstarMassWindow = 0.1,
         double maxSoftPionDeltaR = 0.1,
         double maxVertexChi2Normalized = 5.,
         unsigned int maxCandidates = 30){
     /*
-    Find D* -> D0 pi -> K pi pi candidates.
+    Find D* -> D0 pi -> K pi pi candidates, by combining each entry of d0Candidates
+    (see analyzer_dzerofinder.cxx::getDZeroCandidates) with a third track (the soft
+    pion). minTrackPt is used only to re-derive the same selected-track set that
+    d0Candidates was built from (for the soft-pion loop below); it should match the
+    minTrackPt value used to compute d0Candidates, or the soft-pion candidate pool
+    will be inconsistent with the D0 pair selection.
     Note: cut values above are carried over from the CMS reference implementation
     as defaults, since they were tuned for the CMS silicon tracker; ALEPH's
     TPC-based tracking has different resolution, so these will likely need
@@ -182,174 +189,113 @@ DStarCandidates getDStarCandidates(
 
     DStarCandidates result;
 
-    // preselect reco particles with a good associated track
-    std::vector<int> selectedIndices;
-    for(size_t idx = 0; idx < recoParticles.size(); idx++){
-        const auto& rp = recoParticles[idx];
-        size_t trackIdx = rp.tracks_begin;
-        if(trackIdx >= trackStates.size()) continue;
-        TVector3 p(rp.momentum.x, rp.momentum.y, rp.momentum.z);
-        if(!isGoodTrack(trackStates[trackIdx], trackDatas[trackIdx], p, minTrackPt)) continue;
-        selectedIndices.push_back((int)idx);
-    }
+    // preselect reco particles with a good associated track (same selection that
+    // d0Candidates was built from -- needed here again to draw the soft-pion
+    // candidate from the same quality-selected pool)
+    std::vector<int> selectedIndices = DZeroMesonFinder::getSelectedIndices(
+        recoParticles, trackStates, trackDatas, minTrackPt);
 
-    // loop over pairs of tracks (K/pi2 candidates, i.e. the D0 decay products)
-    for(size_t ii = 0; ii < selectedIndices.size(); ii++){
-        for(size_t jj = ii+1; jj < selectedIndices.size(); jj++){
-            int i = selectedIndices[ii];
-            int j = selectedIndices[jj];
-            const auto& rp1 = recoParticles[i];
-            const auto& rp2 = recoParticles[j];
+    // loop over already-found D0 candidates
+    for(size_t d0idx = 0; d0idx < d0Candidates.mass.size(); d0idx++){
 
-            // same-charge pairs are kept (rather than required to be opposite-charge)
-            // to additionally provide a same-sign combinatorial background estimate,
-            // following the same approach as the reference implementation (see file
-            // docstring); isOppositeSign is stored per-candidate below so downstream
-            // code (e.g. the B finder) can select on it rather than have it hard-cut here.
-            bool isOppositeSign = (rp1.charge * rp2.charge) < 0;
+        int kIdx = d0Candidates.k_idx[d0idx];
+        int pi2Idx = d0Candidates.pi_idx[d0idx];
 
-            TLorentzVector p1; p1.SetXYZM(rp1.momentum.x, rp1.momentum.y, rp1.momentum.z, rp1.mass);
-            TLorentzVector p2; p2.SetXYZM(rp2.momentum.x, rp2.momentum.y, rp2.momentum.z, rp2.mass);
+        // re-derive the D0 4-vector from the K/pi momenta directly (rather than via
+        // SetPtEtaPhiM from d0Candidates' stored float pt/eta/phi/mass), so this
+        // reproduces the exact same double-precision value getDZeroCandidates used
+        // internally, bit-for-bit -- avoids a float32 round-trip precision loss that
+        // would otherwise leak into dstarP4 = d0P4 + pi1P4 below.
+        const auto& rpK = recoParticles[kIdx];
+        const auto& rpPi2 = recoParticles[pi2Idx];
+        TLorentzVector kP4_forD0; kP4_forD0.SetXYZM(rpK.momentum.x, rpK.momentum.y, rpK.momentum.z, DZeroMesonFinder::m_K);
+        TLorentzVector pi2P4_forD0; pi2P4_forD0.SetXYZM(rpPi2.momentum.x, rpPi2.momentum.y, rpPi2.momentum.z, DZeroMesonFinder::m_pi);
+        TLorentzVector d0P4 = kP4_forD0 + pi2P4_forD0;
 
-            // candidates must point approximately in the same direction
-            double dR12 = p1.DeltaR(p2);
-            if(dR12 > maxTrackPairDeltaR) continue;
+        // fit a D0 vertex from the pair of tracks (re-derived here since d0Candidates
+        // only stores summary observables, not the intermediate fit result -- same
+        // tracks, so this reproduces the exact same fit as in getDZeroCandidates)
+        ROOT::VecOps::RVec<edm4hep::TrackState> pairTracks;
+        pairTracks.push_back(trackStates[recoParticles[kIdx].tracks_begin]);
+        pairTracks.push_back(trackStates[recoParticles[pi2Idx].tracks_begin]);
 
-            // find which track plays the "positive" and "negative" role in the K/pi
-            // mass-hypothesis test below. For opposite-charge pairs this follows the
-            // actual physical charge; for same-charge pairs (kept only for the
-            // combinatorial background estimate, see above) there is no physical
-            // meaning to this assignment either way, so it is fixed deterministically
-            // by track index instead of the reference implementation's random choice
-            // (for reproducibility; the choice is arbitrary in this case regardless).
-            int posIdx = isOppositeSign ? ((rp1.charge > 0) ? i : j) : i;
-            int negIdx = isOppositeSign ? ((rp1.charge > 0) ? j : i) : j;
-            const auto& rpPos = recoParticles[posIdx];
-            const auto& rpNeg = recoParticles[negIdx];
+        // loop over third track (soft pion candidate)
+        for(size_t kk = 0; kk < selectedIndices.size(); kk++){
+            int k = selectedIndices[kk];
+            if(k == kIdx || k == pi2Idx) continue;
+            const auto& rp3 = recoParticles[k];
 
-            // make invariant mass under both K-pi hypotheses
-            // (although the D0 decays preferentially to K- pi+, the original
-            // particle could be an anti-D0, which decays preferentially to K+ pi-)
-            TLorentzVector piPlusP4;  piPlusP4.SetXYZM(rpPos.momentum.x, rpPos.momentum.y, rpPos.momentum.z, m_pi);
-            TLorentzVector KMinusP4;  KMinusP4.SetXYZM(rpNeg.momentum.x, rpNeg.momentum.y, rpNeg.momentum.z, m_K);
-            TLorentzVector KPlusP4;   KPlusP4.SetXYZM(rpPos.momentum.x, rpPos.momentum.y, rpPos.momentum.z, m_K);
-            TLorentzVector piMinusP4; piMinusP4.SetXYZM(rpNeg.momentum.x, rpNeg.momentum.y, rpNeg.momentum.z, m_pi);
+            TLorentzVector pi1P4;
+            pi1P4.SetXYZM(rp3.momentum.x, rp3.momentum.y, rp3.momentum.z, m_pi);
 
-            TLorentzVector d0P4 = piPlusP4 + KMinusP4;
-            TLorentzVector d0barP4 = piMinusP4 + KPlusP4;
-            double d0Mass = d0P4.M();
-            double d0barMass = d0barP4.M();
+            // pi candidate must have a minimum pt
+            if(pi1P4.Pt() < minSoftPionPt) continue;
 
-            // invariant mass must be close to the D0 resonance mass
-            TLorentzVector pi2P4, kP4;
-            int pi2Idx = -1, kIdx = -1;
-            bool matched = false;
-            if( (std::abs(d0Mass - m_D0) < d0MassWindow)
-                && (std::abs(d0Mass - m_D0) < std::abs(d0barMass - m_D0)) ){
-                pi2P4 = piPlusP4; kP4 = KMinusP4;
-                pi2Idx = posIdx; kIdx = negIdx;
-                matched = true;
-            } else if( (std::abs(d0barMass - m_D0) < d0MassWindow)
-                       && (std::abs(d0barMass - m_D0) < std::abs(d0Mass - m_D0)) ){
-                pi2P4 = piMinusP4; kP4 = KPlusP4;
-                pi2Idx = negIdx; kIdx = posIdx;
-                d0P4 = d0barP4; d0Mass = d0barMass;
-                matched = true;
-            }
-            if(!matched) continue;
+            // candidate must point approximately in the same direction as the D0
+            double dR3D0 = pi1P4.DeltaR(d0P4);
+            if(dR3D0 > maxSoftPionDeltaR) continue;
 
-            // K candidate must have a minimum pt
-            if(kP4.Pt() < minKaonPt) continue;
+            // make invariant mass (under the pi mass hypothesis for the third track)
+            TLorentzVector dstarP4 = d0P4 + pi1P4;
+            double dstarMass = dstarP4.M();
 
-            // fit a D0 vertex from the pair of tracks
-            ROOT::VecOps::RVec<edm4hep::TrackState> pairTracks;
-            pairTracks.push_back(trackStates[rp1.tracks_begin]);
-            pairTracks.push_back(trackStates[rp2.tracks_begin]);
-            FCCAnalyses::VertexingUtils::FCCAnalysesVertex d0vtx = VertexFitterMod(2, pairTracks);
-            double d0vtxChi2 = d0vtx.vertex.chi2;
-            if(d0vtxChi2 < 0. || d0vtxChi2 > maxVertexChi2Normalized) continue;
+            // check if mass is close enough to the D* mass
+            if(std::abs(dstarMass - m_DStar) > dstarMassWindow) continue;
 
-            // distance between the D0 vertex and the primary vertex (see struct docs)
-            TVector3 d0vtxPos(d0vtx.vertex.position.x, d0vtx.vertex.position.y, d0vtx.vertex.position.z);
-            TVector3 d0vtxDiff = d0vtxPos - primaryVertex;
-            float d0vtxDxy = std::sqrt(d0vtxDiff.X()*d0vtxDiff.X() + d0vtxDiff.Y()*d0vtxDiff.Y());
-            float d0vtxDxyz = d0vtxDiff.Mag();
+            // fit a D* vertex from the triplet of tracks
+            ROOT::VecOps::RVec<edm4hep::TrackState> tripletTracks = pairTracks;
+            tripletTracks.push_back(trackStates[rp3.tracks_begin]);
+            FCCAnalyses::VertexingUtils::FCCAnalysesVertex dstarvtx = VertexFitterMod(2, tripletTracks);
+            double dstarvtxChi2 = dstarvtx.vertex.chi2;
+            if(dstarvtxChi2 < 0. || dstarvtxChi2 > maxVertexChi2Normalized) continue;
 
-            // loop over third track (soft pion candidate)
-            for(size_t kk = 0; kk < selectedIndices.size(); kk++){
-                int k = selectedIndices[kk];
-                if(k == i || k == j) continue;
-                const auto& rp3 = recoParticles[k];
+            // distance between the D* vertex and the primary vertex (see struct docs)
+            TVector3 dstarvtxPos(dstarvtx.vertex.position.x, dstarvtx.vertex.position.y, dstarvtx.vertex.position.z);
+            TVector3 dstarvtxDiff = dstarvtxPos - primaryVertex;
+            float dstarvtxDxy = std::sqrt(dstarvtxDiff.X()*dstarvtxDiff.X() + dstarvtxDiff.Y()*dstarvtxDiff.Y());
+            float dstarvtxDxyz = dstarvtxDiff.Mag();
 
-                TLorentzVector pi1P4;
-                pi1P4.SetXYZM(rp3.momentum.x, rp3.momentum.y, rp3.momentum.z, m_pi);
+            // store the candidate
+            result.mass.push_back(dstarP4.M());
+            result.pt.push_back(dstarP4.Pt());
+            result.eta.push_back(dstarP4.Eta());
+            result.phi.push_back(dstarP4.Phi());
+            result.d0_mass.push_back(d0Candidates.mass[d0idx]);
+            result.d0_pt.push_back(d0Candidates.pt[d0idx]);
+            result.d0_eta.push_back(d0Candidates.eta[d0idx]);
+            result.d0_phi.push_back(d0Candidates.phi[d0idx]);
+            // uses the (double-precision, just-reconstructed) d0P4.M() rather than
+            // d0Candidates.mass[d0idx] (already float-rounded), to avoid a spurious
+            // extra rounding step in the subtraction
+            result.d0_massDiff.push_back(dstarP4.M() - d0P4.M());
+            result.pi1_pt.push_back(pi1P4.Pt());
+            result.pi1_eta.push_back(pi1P4.Eta());
+            result.pi1_phi.push_back(pi1P4.Phi());
+            result.pi1_charge.push_back((int)rp3.charge);
+            result.k_pt.push_back(d0Candidates.k_pt[d0idx]);
+            result.k_eta.push_back(d0Candidates.k_eta[d0idx]);
+            result.k_phi.push_back(d0Candidates.k_phi[d0idx]);
+            result.k_charge.push_back(d0Candidates.k_charge[d0idx]);
+            result.pi2_pt.push_back(d0Candidates.pi_pt[d0idx]);
+            result.pi2_eta.push_back(d0Candidates.pi_eta[d0idx]);
+            result.pi2_phi.push_back(d0Candidates.pi_phi[d0idx]);
+            result.pi2_charge.push_back(d0Candidates.pi_charge[d0idx]);
+            result.tr1tr2_deltaR.push_back(d0Candidates.tr1tr2_deltaR[d0idx]);
+            result.tr3d0_deltaR.push_back(dR3D0);
+            result.d0vtx_chi2Normalized.push_back(d0Candidates.vtx_chi2Normalized[d0idx]);
+            result.dstarvtx_chi2Normalized.push_back(dstarvtxChi2);
+            result.d0vtx_dxy.push_back(d0Candidates.vtx_dxy[d0idx]);
+            result.d0vtx_dxyz.push_back(d0Candidates.vtx_dxyz[d0idx]);
+            result.dstarvtx_dxy.push_back(dstarvtxDxy);
+            result.dstarvtx_dxyz.push_back(dstarvtxDxyz);
+            result.isOppositeSign.push_back(d0Candidates.isOppositeSign[d0idx]);
+            result.k_idx.push_back(kIdx);
+            result.pi2_idx.push_back(pi2Idx);
+            result.pi1_idx.push_back(k);
 
-                // pi candidate must have a minimum pt
-                if(pi1P4.Pt() < minSoftPionPt) continue;
-
-                // candidate must point approximately in the same direction as the D0
-                double dR3D0 = pi1P4.DeltaR(d0P4);
-                if(dR3D0 > maxSoftPionDeltaR) continue;
-
-                // make invariant mass (under the pi mass hypothesis for the third track)
-                TLorentzVector dstarP4 = d0P4 + pi1P4;
-                double dstarMass = dstarP4.M();
-
-                // check if mass is close enough to the D* mass
-                if(std::abs(dstarMass - m_DStar) > dstarMassWindow) continue;
-
-                // fit a D* vertex from the triplet of tracks
-                ROOT::VecOps::RVec<edm4hep::TrackState> tripletTracks = pairTracks;
-                tripletTracks.push_back(trackStates[rp3.tracks_begin]);
-                FCCAnalyses::VertexingUtils::FCCAnalysesVertex dstarvtx = VertexFitterMod(2, tripletTracks);
-                double dstarvtxChi2 = dstarvtx.vertex.chi2;
-                if(dstarvtxChi2 < 0. || dstarvtxChi2 > maxVertexChi2Normalized) continue;
-
-                // distance between the D* vertex and the primary vertex (see struct docs)
-                TVector3 dstarvtxPos(dstarvtx.vertex.position.x, dstarvtx.vertex.position.y, dstarvtx.vertex.position.z);
-                TVector3 dstarvtxDiff = dstarvtxPos - primaryVertex;
-                float dstarvtxDxy = std::sqrt(dstarvtxDiff.X()*dstarvtxDiff.X() + dstarvtxDiff.Y()*dstarvtxDiff.Y());
-                float dstarvtxDxyz = dstarvtxDiff.Mag();
-
-                // store the candidate
-                result.mass.push_back(dstarP4.M());
-                result.pt.push_back(dstarP4.Pt());
-                result.eta.push_back(dstarP4.Eta());
-                result.phi.push_back(dstarP4.Phi());
-                result.d0_mass.push_back(d0P4.M());
-                result.d0_pt.push_back(d0P4.Pt());
-                result.d0_eta.push_back(d0P4.Eta());
-                result.d0_phi.push_back(d0P4.Phi());
-                result.d0_massDiff.push_back(dstarP4.M() - d0P4.M());
-                result.pi1_pt.push_back(pi1P4.Pt());
-                result.pi1_eta.push_back(pi1P4.Eta());
-                result.pi1_phi.push_back(pi1P4.Phi());
-                result.pi1_charge.push_back((int)rp3.charge);
-                result.k_pt.push_back(kP4.Pt());
-                result.k_eta.push_back(kP4.Eta());
-                result.k_phi.push_back(kP4.Phi());
-                result.k_charge.push_back((int)recoParticles[kIdx].charge);
-                result.pi2_pt.push_back(pi2P4.Pt());
-                result.pi2_eta.push_back(pi2P4.Eta());
-                result.pi2_phi.push_back(pi2P4.Phi());
-                result.pi2_charge.push_back((int)recoParticles[pi2Idx].charge);
-                result.tr1tr2_deltaR.push_back(dR12);
-                result.tr3d0_deltaR.push_back(dR3D0);
-                result.d0vtx_chi2Normalized.push_back(d0vtxChi2);
-                result.dstarvtx_chi2Normalized.push_back(dstarvtxChi2);
-                result.d0vtx_dxy.push_back(d0vtxDxy);
-                result.d0vtx_dxyz.push_back(d0vtxDxyz);
-                result.dstarvtx_dxy.push_back(dstarvtxDxy);
-                result.dstarvtx_dxyz.push_back(dstarvtxDxyz);
-                result.isOppositeSign.push_back(isOppositeSign);
-                result.k_idx.push_back(kIdx);
-                result.pi2_idx.push_back(pi2Idx);
-                result.pi1_idx.push_back(k);
-
-                if(result.mass.size() >= maxCandidates) return result;
-            } // end loop over third track
-        }
-    } // end loop over first and second track
+            if(result.mass.size() >= maxCandidates) return result;
+        } // end loop over third track
+    } // end loop over D0 candidates
 
     return result;
 }

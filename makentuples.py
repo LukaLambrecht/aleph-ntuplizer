@@ -66,6 +66,16 @@ if __name__=='__main__':
             'JetsConstituents_omega_wrt0', 'JetsConstituents_tanlambda_wrt0',
             'Jets_px', 'Jets_py', 'Jets_pz',
 
+            # DZeroCandidates_* are a flat, event-level collection (one entry per
+            # D0 candidate, not per jet); same reasoning as DStarCandidates_* below.
+            'Event_nDZeroCandidates',
+            'DZeroCandidates_mass', 'DZeroCandidates_pt', 'DZeroCandidates_eta', 'DZeroCandidates_phi',
+            'DZeroCandidates_k_pt', 'DZeroCandidates_k_eta', 'DZeroCandidates_k_phi', 'DZeroCandidates_k_charge',
+            'DZeroCandidates_pi_pt', 'DZeroCandidates_pi_eta', 'DZeroCandidates_pi_phi', 'DZeroCandidates_pi_charge',
+            'DZeroCandidates_tr1tr2_deltaR', 'DZeroCandidates_vtx_chi2Normalized',
+            'DZeroCandidates_vtx_dxy', 'DZeroCandidates_vtx_dxyz',
+            'DZeroCandidates_isOppositeSign', 'DZeroCandidates_hasGenMatch',
+
             # DStarCandidates_* are a flat, event-level collection (one entry per
             # D* candidate, not per jet); they don't fit the "truncate/repeat to
             # the leading 2 jets" reshaping below, so skip them here rather than

@@ -83,9 +83,16 @@ ROOT.gInterpreter.Declare(f'#include "{analyzer_path}"')
 analyzer_path = os.path.join(os.path.dirname(__file__), 'analyzers', 'analyzer_svfinder.cxx')
 ROOT.gInterpreter.Declare(f'#include "{analyzer_path}"')
 
-# load custom analyzer with D* meson finding tools
+# load custom analyzer with D0 meson finding tools
 # note: must be declared after analyzer_svfinder.cxx, since it relies on
 # VertexFitterMod (defined there) already being available.
+analyzer_path = os.path.join(os.path.dirname(__file__), 'analyzers', 'analyzer_dzerofinder.cxx')
+ROOT.gInterpreter.Declare(f'#include "{analyzer_path}"')
+
+# load custom analyzer with D* meson finding tools
+# note: must be declared after analyzer_svfinder.cxx (for VertexFitterMod); does not
+# need to be declared relative to analyzer_dzerofinder.cxx since it #includes that file
+# directly itself (safe, since that file has its own top-level include guard).
 analyzer_path = os.path.join(os.path.dirname(__file__), 'analyzers', 'analyzer_dstarfinder.cxx')
 ROOT.gInterpreter.Declare(f'#include "{analyzer_path}"')
 
@@ -219,6 +226,7 @@ ROOT.gInterpreter.Declare("""
 # (try to do more cleanly later, but doesn't seem very trivial with RDFanalysis)
 do_secondary_vertices = False
 do_v0_candidates = False
+do_dzero_candidates = True
 do_dstar_candidates = True
 do_bmeson_candidates = True
 
@@ -627,6 +635,60 @@ class RDFanalysis():
 
           )
 
+        # find D0 -> K pi candidates
+        # note: this is a flat, event-level collection (not distributed over jets,
+        # unlike SecondaryVertices/V0Candidates above), since D0 candidates are not
+        # meaningfully associated to a single jet.
+        # note: the raw candidates are computed whenever D0 finding, D* finding,
+        # and/or B finding is switched on, since the D* finder (below) reuses these
+        # D0 candidates rather than re-running the same K/pi combinatorial search
+        # (see analyzer_dzerofinder.cxx / analyzer_dstarfinder.cxx); do_dzero_candidates
+        # only controls whether the DZeroCandidates_* branches themselves are written out.
+        if do_dzero_candidates or do_dstar_candidates or do_bmeson_candidates:
+          dfout = dfout.Define("DZeroCandidatesRaw",
+            "DZeroMesonFinder::getDZeroCandidates(ReconstructedParticles, EFlowTrack_1, EFlowTrack, PrimaryVertexP3)")
+
+          # "poor man's" gen-level match for the D0 candidates (see note in
+          # analyzer_dzerofinder.cxx for why this can only be a geometric match on the
+          # whole D0 candidate, not on its individual decay products: mother-daughter
+          # gen links are not populated in this dataset). Computed here (whenever any
+          # of the three flags above is on) rather than only under do_dzero_candidates,
+          # so it is available without recomputation wherever needed.
+          if dtype=='sim':
+              dfout = dfout.Define("DZeroCandidatesRawGenMatch",
+                "DZeroMesonFinder::matchToGenDZero(DZeroCandidatesRaw.pt, DZeroCandidatesRaw.eta, DZeroCandidatesRaw.phi, DZeroCandidatesRaw.mass, Particle)")
+          else:
+              dfout = dfout.Define("DZeroCandidatesRawGenMatch",
+                "DZeroMesonFinder::matchToGenDZeroDummy(DZeroCandidatesRaw.pt)")
+
+        if do_dzero_candidates:
+          dfout = (
+            dfout
+
+            .Define("DZeroCandidates_mass", "DZeroCandidatesRaw.mass")
+            .Define("DZeroCandidates_pt", "DZeroCandidatesRaw.pt")
+            .Define("DZeroCandidates_eta", "DZeroCandidatesRaw.eta")
+            .Define("DZeroCandidates_phi", "DZeroCandidatesRaw.phi")
+            .Define("DZeroCandidates_k_pt", "DZeroCandidatesRaw.k_pt")
+            .Define("DZeroCandidates_k_eta", "DZeroCandidatesRaw.k_eta")
+            .Define("DZeroCandidates_k_phi", "DZeroCandidatesRaw.k_phi")
+            .Define("DZeroCandidates_k_charge", "DZeroCandidatesRaw.k_charge")
+            .Define("DZeroCandidates_pi_pt", "DZeroCandidatesRaw.pi_pt")
+            .Define("DZeroCandidates_pi_eta", "DZeroCandidatesRaw.pi_eta")
+            .Define("DZeroCandidates_pi_phi", "DZeroCandidatesRaw.pi_phi")
+            .Define("DZeroCandidates_pi_charge", "DZeroCandidatesRaw.pi_charge")
+            .Define("DZeroCandidates_tr1tr2_deltaR", "DZeroCandidatesRaw.tr1tr2_deltaR")
+            .Define("DZeroCandidates_vtx_chi2Normalized", "DZeroCandidatesRaw.vtx_chi2Normalized")
+            .Define("DZeroCandidates_vtx_dxy", "DZeroCandidatesRaw.vtx_dxy")
+            .Define("DZeroCandidates_vtx_dxyz", "DZeroCandidatesRaw.vtx_dxyz")
+            .Define("DZeroCandidates_isOppositeSign", "DZeroCandidatesRaw.isOppositeSign")
+            # already computed above (shared with the D*/B finders, see note there)
+            .Define("DZeroCandidates_hasGenMatch", "DZeroCandidatesRawGenMatch")
+
+            # store counter
+            .Define("Event_nDZeroCandidates", "DZeroCandidatesRaw.mass.size()")
+          )
+
         # find D* -> D0 pi -> K pi pi candidates
         # note: this is a flat, event-level collection (not distributed over jets,
         # unlike SecondaryVertices/V0Candidates above), since D* candidates are not
@@ -635,9 +697,12 @@ class RDFanalysis():
         # switched on, since the B finder (below) reuses these D* candidates rather
         # than re-running the same combinatorial search; do_dstar_candidates only
         # controls whether the DStarCandidates_* branches themselves are written out.
+        # note: this reuses DZeroCandidatesRaw (see above) rather than re-running the
+        # D0 K/pi search; this works correctly regardless of whether do_dzero_candidates
+        # itself is switched on.
         if do_dstar_candidates or do_bmeson_candidates:
           dfout = dfout.Define("DStarCandidatesRaw",
-            "DStarMesonFinder::getDStarCandidates(ReconstructedParticles, EFlowTrack_1, EFlowTrack, PrimaryVertexP3)")
+            "DStarMesonFinder::getDStarCandidates(DZeroCandidatesRaw, ReconstructedParticles, EFlowTrack_1, EFlowTrack, PrimaryVertexP3)")
 
           # "poor man's" gen-level match for the D* candidates (see note in
           # analyzer_dstarfinder.cxx for why this can only be a geometric match on the
@@ -1078,6 +1143,30 @@ class RDFanalysis():
             'V0Candidates_dxyz',
             'V0Candidates_cosPointing',
             'V0Candidates_correctedMass',
+          ]
+
+        # D0 candidate variables
+        if do_dzero_candidates:
+          branchList += [
+            'Event_nDZeroCandidates',
+            'DZeroCandidates_mass',
+            'DZeroCandidates_pt',
+            'DZeroCandidates_eta',
+            'DZeroCandidates_phi',
+            'DZeroCandidates_k_pt',
+            'DZeroCandidates_k_eta',
+            'DZeroCandidates_k_phi',
+            'DZeroCandidates_k_charge',
+            'DZeroCandidates_pi_pt',
+            'DZeroCandidates_pi_eta',
+            'DZeroCandidates_pi_phi',
+            'DZeroCandidates_pi_charge',
+            'DZeroCandidates_tr1tr2_deltaR',
+            'DZeroCandidates_vtx_chi2Normalized',
+            'DZeroCandidates_vtx_dxy',
+            'DZeroCandidates_vtx_dxyz',
+            'DZeroCandidates_isOppositeSign',
+            'DZeroCandidates_hasGenMatch',
           ]
 
         # D* candidate variables
