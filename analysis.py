@@ -83,6 +83,14 @@ ROOT.gInterpreter.Declare(f'#include "{analyzer_path}"')
 analyzer_path = os.path.join(os.path.dirname(__file__), 'analyzers', 'analyzer_svfinder.cxx')
 ROOT.gInterpreter.Declare(f'#include "{analyzer_path}"')
 
+# load custom analyzer with the two-tier V0 finder (ported from
+# https://github.com/bistapf/Aleph/pull/1; see analyzer_v0new.cxx docstring).
+# note: no ordering dependency on analyzer_svfinder.cxx -- unlike the D*/D0/B
+# finders, this one uses vanilla FCCAnalyses::VertexFitterSimple::VertexFitter_Tk
+# directly rather than this repo's own VertexFitterMod.
+analyzer_path = os.path.join(os.path.dirname(__file__), 'analyzers', 'analyzer_v0new.cxx')
+ROOT.gInterpreter.Declare(f'#include "{analyzer_path}"')
+
 # load custom analyzer with D0 meson finding tools
 # note: must be declared after analyzer_svfinder.cxx, since it relies on
 # VertexFitterMod (defined there) already being available.
@@ -225,10 +233,13 @@ ROOT.gInterpreter.Declare("""
 # dirty hard-coded settings using global variables
 # (try to do more cleanly later, but doesn't seem very trivial with RDFanalysis)
 do_secondary_vertices = False
-do_v0_candidates = False
-do_dzero_candidates = True
-do_dstar_candidates = True
-do_bmeson_candidates = True
+do_v0_candidates = True
+# if True: source all V0Candidates_* variables from the new two-tier V0 finder
+# (analyzer_v0new.cxx) instead of the existing get_V0s (analyzer_svfinder.cxx).
+do_new_v0_finder = True
+do_dzero_candidates = False
+do_dstar_candidates = False
+do_bmeson_candidates = False
 
 
 # main analyzer class
@@ -599,17 +610,31 @@ class RDFanalysis():
 
         # find V0s (per jet)
         if do_v0_candidates:
+
+          # reconstruct all V0 candidates in the event, from either finder (both
+          # return FCCAnalyses::VertexingUtils::FCCAnalysesV0, so every variable
+          # below is computed the same way regardless of the source).
+          if do_new_v0_finder:
+            dfout = dfout.Define("EventV0s", "V0NewFinder::findV0s(SecondaryTracks, PrimaryVertexObject)")
+            # whether each candidate passed the new finder's tight (adopted) package,
+            # as opposed to its loose (ML-training) tier.
+            dfout = dfout.Define("EventV0s_tight", "V0NewFinder::candTight(EventV0s, PrimaryVertexObject, SecondaryTracks)")
+          else:
+            dfout = dfout.Define("EventV0s", "SecondaryVertexFinder::get_V0s(SecondaryTracks, PrimaryVertexObject, false, 10.)")
+            # not applicable to the old finder; dummy -1 per candidate rather than
+            # omitting the branch, so downstream code doesn't need to special-case
+            # its presence.
+            dfout = dfout.Define("EventV0s_tight", "ROOT::VecOps::RVec<int>(EventV0s.vtx.size(), -1)")
+
           dfout = (
             dfout
 
-            # reconstruct all V0 candidates in the event
-            # note: arguments are (in order): tracks, primary vertex, whether to use tight constraints, chi2 threshold
-            .Define("EventV0s", "SecondaryVertexFinder::get_V0s(SecondaryTracks, PrimaryVertexObject, false, 10.)")
             .Define("V0Candidates", "SecondaryVertexTools::distributeSecondaryVerticesOverJets(EventV0s.vtx, jets_ee_genkt)")
             .Define("v0_jet_ids", "SecondaryVertexTools::getSecondaryVertexJetIndices(EventV0s.vtx, jets_ee_genkt)")
 
             # calculate properties of V0 candidates to store
             .Define("V0Candidates_pdgId", "SecondaryVertexTools::distributeOverJets(EventV0s.pdgAbs, v0_jet_ids)")
+            .Define("V0Candidates_tight", "SecondaryVertexTools::distributeOverJets(EventV0s_tight, v0_jet_ids)")
             .Define("V0Candidates_xrel", "VertexTools::get_xrel_SV_jets(V0Candidates, PrimaryVertexP3)")
             .Define("V0Candidates_yrel", "VertexTools::get_yrel_SV_jets(V0Candidates, PrimaryVertexP3)")
             .Define("V0Candidates_zrel", "VertexTools::get_zrel_SV_jets(V0Candidates, PrimaryVertexP3)")
@@ -1127,6 +1152,7 @@ class RDFanalysis():
             'Jets_nKsCandidates',
             'Jets_nLambdaCandidates',
             'V0Candidates_pdgId',
+            'V0Candidates_tight',
             'V0Candidates_xrel',
             'V0Candidates_yrel',
             'V0Candidates_zrel',
