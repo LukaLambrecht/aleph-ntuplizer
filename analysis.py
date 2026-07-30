@@ -232,7 +232,7 @@ ROOT.gInterpreter.Declare("""
 
 # dirty hard-coded settings using global variables
 # (try to do more cleanly later, but doesn't seem very trivial with RDFanalysis)
-do_secondary_vertices = False
+do_secondary_vertices = True
 do_v0_candidates = True
 # if True: source all V0Candidates_* variables from the new two-tier V0 finder
 # (analyzer_v0new.cxx) instead of the existing get_V0s (analyzer_svfinder.cxx).
