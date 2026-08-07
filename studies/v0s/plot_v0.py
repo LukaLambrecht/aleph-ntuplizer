@@ -24,12 +24,16 @@ if __name__=='__main__':
     inputfiles = sys.argv[1:]
     treename = 'events'
     outputfile = 'v0_mass.png'
+    # in older samples, the V0Candidates_tight branch is not available;
+    # hence disable it here (maybe deduce automatically later).
+    do_tight = False
 
     if len(inputfiles)==0:
         raise Exception('Please provide at least one input file (stage-1 ntuple).')
 
     # read input files
-    branches = ['V0Candidates_pdgId', 'V0Candidates_mass', 'V0Candidates_tight']
+    branches = ['V0Candidates_pdgId', 'V0Candidates_mass']
+    if do_tight: branches += ['V0Candidates_tight']
     batches = []
     for idx, inputfile in enumerate(inputfiles):
         print(f'Reading file {idx+1} / {len(inputfiles)}...')
@@ -43,7 +47,8 @@ if __name__=='__main__':
     # i.e. event -> jet -> candidate, so flatten fully)
     pdgId = ak.to_numpy(ak.flatten(events['V0Candidates_pdgId'], axis=None))
     mass = ak.to_numpy(ak.flatten(events['V0Candidates_mass'], axis=None))
-    tight = ak.to_numpy(ak.flatten(events['V0Candidates_tight'], axis=None))
+    tight = np.ones(mass.shape) * -1
+    if do_tight: tight = ak.to_numpy(ak.flatten(events['V0Candidates_tight'], axis=None))
     print(f'Found {len(mass)} V0 candidates ({(tight==1).sum()} tight,'
           + f' {(tight==0).sum()} loose-only, {(tight==-1).sum()} n/a).')
 
